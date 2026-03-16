@@ -24,6 +24,7 @@ export type Database = {
           location_id: string
           member_id: string
           service_id: string
+          status: Database["public"]["Enums"]["attendance_status"]
         }
         Insert: {
           card_id?: string | null
@@ -34,6 +35,7 @@ export type Database = {
           location_id: string
           member_id: string
           service_id: string
+          status?: Database["public"]["Enums"]["attendance_status"]
         }
         Update: {
           card_id?: string | null
@@ -44,6 +46,7 @@ export type Database = {
           location_id?: string
           member_id?: string
           service_id?: string
+          status?: Database["public"]["Enums"]["attendance_status"]
         }
         Relationships: [
           {
@@ -579,6 +582,7 @@ export type Database = {
         | "district_admin"
         | "location_admin"
         | "data_officer"
+      attendance_status: "present" | "late" | "absent"
       card_status: "active" | "lost" | "replaced" | "inactive"
       followup_status: "pending" | "in_progress" | "completed" | "cancelled"
       member_category:
@@ -731,6 +735,7 @@ export const Constants = {
         "location_admin",
         "data_officer",
       ],
+      attendance_status: ["present", "late", "absent"],
       card_status: ["active", "lost", "replaced", "inactive"],
       followup_status: ["pending", "in_progress", "completed", "cancelled"],
       member_category: [
