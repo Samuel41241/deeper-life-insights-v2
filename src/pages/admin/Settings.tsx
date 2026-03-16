@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Settings as SettingsIcon, Plus, Trash2, Clock } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Settings as SettingsIcon, Plus, Trash2, Clock, Sliders } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getEngagementConfig, saveEngagementConfig, type EngagementConfig } from "@/hooks/use-engagement";
 
 const dayLabels: Record<string, string> = {
   sunday: "Sunday", monday: "Monday", tuesday: "Tuesday", wednesday: "Wednesday",
@@ -28,6 +29,14 @@ export default function SettingsPage() {
   const createService = useCreateService();
   const deleteService = useDeleteService();
   const { toast } = useToast();
+
+  // Engagement thresholds
+  const [engConfig, setEngConfig] = useState<EngagementConfig>(getEngagementConfig());
+
+  const handleSaveEngConfig = () => {
+    saveEngagementConfig(engConfig);
+    toast({ title: "Engagement thresholds saved" });
+  };
 
   const handleCreate = async () => {
     if (!name.trim() || !serviceType.trim() || !dayOfWeek) {
@@ -63,12 +72,13 @@ export default function SettingsPage() {
     <div className="admin-page">
       <div>
         <h1 className="admin-page-title">Settings</h1>
-        <p className="admin-page-description">System configuration and service management</p>
+        <p className="admin-page-description">System configuration, services, and engagement thresholds</p>
       </div>
 
       <Tabs defaultValue="services">
         <TabsList>
           <TabsTrigger value="services">Church Services</TabsTrigger>
+          <TabsTrigger value="engagement">Engagement Thresholds</TabsTrigger>
           <TabsTrigger value="system">System</TabsTrigger>
         </TabsList>
 
@@ -110,6 +120,61 @@ export default function SettingsPage() {
                 </Button>
               </div>
             ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="engagement" className="mt-4">
+          <div className="stat-card space-y-6">
+            <div className="flex items-center gap-2">
+              <Sliders className="h-5 w-5 text-muted-foreground" />
+              <h2 className="font-heading font-bold text-lg">Engagement Thresholds</h2>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Configure how many missed services trigger each risk level. Changes apply to the Engagement & Alerts page.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Watchlist threshold (missed services)</Label>
+                <Input
+                  type="number" min={1} max={10}
+                  value={engConfig.watchlistThreshold}
+                  onChange={(e) => setEngConfig((c) => ({ ...c, watchlistThreshold: parseInt(e.target.value) || 1 }))}
+                  className="h-11"
+                />
+                <p className="text-xs text-muted-foreground">Members missing this many services appear on watchlist</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Follow-up threshold (missed services)</Label>
+                <Input
+                  type="number" min={1} max={10}
+                  value={engConfig.followUpThreshold}
+                  onChange={(e) => setEngConfig((c) => ({ ...c, followUpThreshold: parseInt(e.target.value) || 2 }))}
+                  className="h-11"
+                />
+                <p className="text-xs text-muted-foreground">Members missing this many are flagged for follow-up</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Pastoral attention threshold (missed services)</Label>
+                <Input
+                  type="number" min={1} max={20}
+                  value={engConfig.pastoralThreshold}
+                  onChange={(e) => setEngConfig((c) => ({ ...c, pastoralThreshold: parseInt(e.target.value) || 4 }))}
+                  className="h-11"
+                />
+                <p className="text-xs text-muted-foreground">Members missing this many need pastoral care</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Reporting window (weeks)</Label>
+                <Input
+                  type="number" min={2} max={26}
+                  value={engConfig.windowWeeks}
+                  onChange={(e) => setEngConfig((c) => ({ ...c, windowWeeks: parseInt(e.target.value) || 6 }))}
+                  className="h-11"
+                />
+                <p className="text-xs text-muted-foreground">How many weeks of history to analyze</p>
+              </div>
+            </div>
+            <Button onClick={handleSaveEngConfig}>Save Thresholds</Button>
           </div>
         </TabsContent>
 

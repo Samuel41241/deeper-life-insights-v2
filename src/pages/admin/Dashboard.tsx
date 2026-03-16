@@ -1,16 +1,30 @@
-import { LayoutDashboard, Users, TrendingUp, AlertTriangle, Clock } from "lucide-react";
+import { LayoutDashboard, Users, TrendingUp, TrendingDown, AlertTriangle, Clock, Heart, Eye, BellRing } from "lucide-react";
 import { useTotalMembers, useTodayAttendanceCount, useRecentScans } from "@/hooks/use-attendance";
 import { useServices } from "@/hooks/use-services";
+import { useEngagementData } from "@/hooks/use-engagement";
+import { Link } from "react-router-dom";
+import { useMemo } from "react";
 
 export default function Dashboard() {
   const totalMembers = useTotalMembers();
   const todayCount = useTodayAttendanceCount();
   const recentScans = useRecentScans(8);
   const services = useServices();
+  const engagement = useEngagementData();
 
   const memberCount = totalMembers.data ?? 0;
   const presentToday = todayCount.data ?? 0;
   const attendanceRate = memberCount > 0 ? ((presentToday / memberCount) * 100).toFixed(1) : "0";
+
+  const engCounts = useMemo(() => {
+    if (!engagement.data) return { followUp: 0, pastoral: 0, declining: 0, watchlist: 0 };
+    return {
+      followUp: engagement.data.filter((m) => m.risk_level === "follow_up").length,
+      pastoral: engagement.data.filter((m) => m.risk_level === "pastoral_attention").length,
+      declining: engagement.data.filter((m) => m.trend === "declining").length,
+      watchlist: engagement.data.filter((m) => m.risk_level === "watchlist").length,
+    };
+  }, [engagement.data]);
 
   const stats = [
     { label: "Total Members", value: memberCount.toLocaleString(), icon: Users, change: "Active members" },
@@ -37,6 +51,50 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground mt-1">{stat.change}</p>
           </div>
         ))}
+      </div>
+
+      {/* Engagement Intelligence Cards */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-heading font-semibold flex items-center gap-2">
+            <BellRing className="h-5 w-5 text-muted-foreground" /> Engagement Alerts
+          </h2>
+          <Link to="/admin/engagement" className="text-sm text-primary hover:underline">View all →</Link>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Link to="/admin/engagement" className="stat-card border-l-4 border-l-amber-500 hover:bg-accent/30 transition-colors">
+            <div className="flex items-center gap-2 mb-2">
+              <Eye className="h-4 w-4 text-amber-600" />
+              <span className="text-sm text-muted-foreground">Watchlist</span>
+            </div>
+            <p className="text-2xl font-heading font-bold">{engagement.isLoading ? "—" : engCounts.watchlist}</p>
+            <p className="text-xs text-muted-foreground mt-1">Members showing early signs</p>
+          </Link>
+          <Link to="/admin/engagement" className="stat-card border-l-4 border-l-orange-500 hover:bg-accent/30 transition-colors">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+              <span className="text-sm text-muted-foreground">Follow-Up Required</span>
+            </div>
+            <p className="text-2xl font-heading font-bold">{engagement.isLoading ? "—" : engCounts.followUp}</p>
+            <p className="text-xs text-muted-foreground mt-1">Need leadership outreach</p>
+          </Link>
+          <Link to="/admin/engagement" className="stat-card border-l-4 border-l-red-500 hover:bg-accent/30 transition-colors">
+            <div className="flex items-center gap-2 mb-2">
+              <Heart className="h-4 w-4 text-red-600" />
+              <span className="text-sm text-muted-foreground">Pastoral Attention</span>
+            </div>
+            <p className="text-2xl font-heading font-bold">{engagement.isLoading ? "—" : engCounts.pastoral}</p>
+            <p className="text-xs text-muted-foreground mt-1">Urgent intervention needed</p>
+          </Link>
+          <Link to="/admin/engagement" className="stat-card border-l-4 border-l-destructive hover:bg-accent/30 transition-colors">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingDown className="h-4 w-4 text-destructive" />
+              <span className="text-sm text-muted-foreground">Declining Participation</span>
+            </div>
+            <p className="text-2xl font-heading font-bold">{engagement.isLoading ? "—" : engCounts.declining}</p>
+            <p className="text-xs text-muted-foreground mt-1">Attendance trend going down</p>
+          </Link>
+        </div>
       </div>
 
       {/* Recent Scans */}
