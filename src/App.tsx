@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import { AdminLayout } from "./components/layout/AdminLayout";
 import Dashboard from "./pages/admin/Dashboard";
@@ -20,6 +21,7 @@ import AttendanceHistory from "./pages/admin/AttendanceHistory";
 import Reports from "./pages/admin/Reports";
 import Engagement from "./pages/admin/Engagement";
 import SettingsPage from "./pages/admin/Settings";
+import UserManagement from "./pages/admin/UserManagement";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +35,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="hierarchy" element={<ChurchHierarchy />} />
@@ -45,6 +48,7 @@ const App = () => (
               <Route path="reports" element={<Reports />} />
               <Route path="engagement" element={<Engagement />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="users" element={<UserManagement />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

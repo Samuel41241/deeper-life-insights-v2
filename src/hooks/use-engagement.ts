@@ -53,30 +53,38 @@ function computeRisk(missed: number, config: EngagementConfig): RiskLevel {
   return "no_concern";
 }
 
-export function useEngagementData() {
+// scopedLocationIds: null = all, string[] = filter
+export function useEngagementData(scopedLocationIds?: string[] | null) {
   const config = getEngagementConfig();
 
   return useQuery({
-    queryKey: ["engagement-data", config],
+    queryKey: ["engagement-data", config, scopedLocationIds],
     queryFn: async () => {
       const windowStart = new Date();
       windowStart.setDate(windowStart.getDate() - config.windowWeeks * 7);
       const windowStartStr = windowStart.toISOString().split("T")[0];
 
-      // Fetch all active members
-      const { data: members, error: mErr } = await supabase
+      // Fetch all active members (with scope filter)
+      let membersQuery = supabase
         .from("members")
         .select("id, full_name, category, status, location_id, locations(name)")
         .eq("status", "active")
         .order("full_name");
+
+      if (scopedLocationIds && scopedLocationIds.length > 0) {
+        membersQuery = membersQuery.in("location_id", scopedLocationIds);
+      } else if (scopedLocationIds && scopedLocationIds.length === 0) {
+        return [];
+      }
+
+      const { data: members, error: mErr } = await membersQuery;
       if (mErr) throw mErr;
 
-      // Fetch services count in window (approximate by unique service dates)
+      // Fetch services count in window
       const { data: services } = await supabase
         .from("services")
         .select("id, day_of_week");
 
-      // Count total service opportunities in window
       const totalServicesInWindow = services?.length
         ? countServiceOccurrences(services, windowStartStr, new Date().toISOString().split("T")[0])
         : config.windowWeeks;
@@ -89,14 +97,12 @@ export function useEngagementData() {
         .order("date", { ascending: false });
       if (aErr) throw aErr;
 
-      // Fetch recent attendance for all members (for last attended + consecutive)
       const { data: allAttendance } = await supabase
         .from("attendance")
         .select("member_id, date")
         .order("date", { ascending: false })
         .limit(1000);
 
-      // Build per-member maps
       const attendanceByMember = new Map<string, string[]>();
       attendance?.forEach((a) => {
         const dates = attendanceByMember.get(a.member_id) || [];
@@ -111,7 +117,6 @@ export function useEngagementData() {
         }
       });
 
-      // Compute recent service dates for consecutive absence calc
       const recentServiceDates = getRecentServiceDates(services || [], 8);
 
       const results: MemberEngagement[] = (members || []).map((m) => {
@@ -122,7 +127,6 @@ export function useEngagementData() {
         const rate = totalServicesInWindow > 0 ? (attended / totalServicesInWindow) * 100 : 100;
         const lastAttended = lastAttendedMap.get(m.id) || null;
 
-        // Consecutive absences from most recent services
         let consecutive = 0;
         for (const sd of recentServiceDates) {
           if (!uniqueDates.has(sd)) {
@@ -132,7 +136,6 @@ export function useEngagementData() {
           }
         }
 
-        // Trend: compare first half vs second half of window
         const midpoint = new Date();
         midpoint.setDate(midpoint.getDate() - Math.floor((config.windowWeeks * 7) / 2));
         const midStr = midpoint.toISOString().split("T")[0];
@@ -191,7 +194,6 @@ export function useMemberAttendanceHistory(memberId: string) {
   });
 }
 
-// Helper: count how many service occurrences happened between two dates
 function countServiceOccurrences(
   services: { id: string; day_of_week: string }[],
   startStr: string,
@@ -208,7 +210,6 @@ function countServiceOccurrences(
   for (const s of services) {
     const dow = dayMap[s.day_of_week] ?? -1;
     if (dow < 0) continue;
-    // Count occurrences of this day in the range
     const firstDay = start.getDay();
     let daysUntilFirst = (dow - firstDay + 7) % 7;
     total += Math.max(0, Math.floor((days - daysUntilFirst) / 7) + 1);
@@ -216,7 +217,6 @@ function countServiceOccurrences(
   return Math.max(total, 1);
 }
 
-// Get the most recent N service dates based on configured services
 function getRecentServiceDates(
   services: { id: string; day_of_week: string }[],
   count: number
