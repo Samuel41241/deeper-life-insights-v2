@@ -487,9 +487,12 @@ export type Database = {
         Row: {
           created_at: string
           district_id: string | null
+          email: string | null
           group_district_id: string | null
           id: string
+          is_active: boolean
           location_id: string | null
+          must_change_password: boolean
           region_id: string | null
           role: Database["public"]["Enums"]["app_role"]
           state_id: string | null
@@ -498,9 +501,12 @@ export type Database = {
         Insert: {
           created_at?: string
           district_id?: string | null
+          email?: string | null
           group_district_id?: string | null
           id?: string
+          is_active?: boolean
           location_id?: string | null
+          must_change_password?: boolean
           region_id?: string | null
           role: Database["public"]["Enums"]["app_role"]
           state_id?: string | null
@@ -509,9 +515,12 @@ export type Database = {
         Update: {
           created_at?: string
           district_id?: string | null
+          email?: string | null
           group_district_id?: string | null
           id?: string
+          is_active?: boolean
           location_id?: string | null
+          must_change_password?: boolean
           region_id?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           state_id?: string | null
@@ -567,6 +576,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      mark_password_changed: { Args: never; Returns: undefined }
     }
     Enums: {
       alert_type:
