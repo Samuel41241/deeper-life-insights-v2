@@ -88,16 +88,22 @@ export function useAttendanceHistory(filters: {
   });
 }
 
-export function useTodayAttendanceCount(serviceId?: string) {
+// scopedLocationIds: null = all, string[] = filter to these locations
+export function useTodayAttendanceCount(serviceId?: string, scopedLocationIds?: string[] | null) {
   const today = new Date().toISOString().split("T")[0];
   return useQuery({
-    queryKey: ["dashboard-stats", "today-attendance", today, serviceId],
+    queryKey: ["dashboard-stats", "today-attendance", today, serviceId, scopedLocationIds],
     queryFn: async () => {
       let q = supabase
         .from("attendance")
         .select("id", { count: "exact", head: true })
         .eq("date", today);
       if (serviceId) q = q.eq("service_id", serviceId);
+      if (scopedLocationIds && scopedLocationIds.length > 0) {
+        q = q.in("location_id", scopedLocationIds);
+      } else if (scopedLocationIds && scopedLocationIds.length === 0) {
+        return 0; // no access
+      }
       const { count, error } = await q;
       if (error) throw error;
       return count || 0;
@@ -105,32 +111,44 @@ export function useTodayAttendanceCount(serviceId?: string) {
   });
 }
 
-export function useTotalMembers() {
+export function useTotalMembers(scopedLocationIds?: string[] | null) {
   return useQuery({
-    queryKey: ["dashboard-stats", "total-members"],
+    queryKey: ["dashboard-stats", "total-members", scopedLocationIds],
     queryFn: async () => {
-      const { count, error } = await supabase
+      let q = supabase
         .from("members")
         .select("id", { count: "exact", head: true })
         .eq("status", "active");
+      if (scopedLocationIds && scopedLocationIds.length > 0) {
+        q = q.in("location_id", scopedLocationIds);
+      } else if (scopedLocationIds && scopedLocationIds.length === 0) {
+        return 0;
+      }
+      const { count, error } = await q;
       if (error) throw error;
       return count || 0;
     },
   });
 }
 
-export function useRecentScans(limit = 10) {
+export function useRecentScans(limit = 10, scopedLocationIds?: string[] | null) {
   const today = new Date().toISOString().split("T")[0];
   return useQuery({
-    queryKey: ["dashboard-stats", "recent-scans", today],
+    queryKey: ["dashboard-stats", "recent-scans", today, scopedLocationIds],
     refetchInterval: 5000,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("attendance")
         .select("*, members(full_name), services(name)")
         .eq("date", today)
         .order("check_in_time", { ascending: false })
         .limit(limit);
+      if (scopedLocationIds && scopedLocationIds.length > 0) {
+        q = q.in("location_id", scopedLocationIds);
+      } else if (scopedLocationIds && scopedLocationIds.length === 0) {
+        return [];
+      }
+      const { data, error } = await q;
       if (error) throw error;
       return data;
     },

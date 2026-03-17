@@ -2,15 +2,19 @@ import { LayoutDashboard, Users, TrendingUp, TrendingDown, AlertTriangle, Clock,
 import { useTotalMembers, useTodayAttendanceCount, useRecentScans } from "@/hooks/use-attendance";
 import { useServices } from "@/hooks/use-services";
 import { useEngagementData } from "@/hooks/use-engagement";
+import { useScopedLocationIds, useUserRole, roleLabels } from "@/hooks/use-user-role";
 import { Link } from "react-router-dom";
 import { useMemo } from "react";
 
 export default function Dashboard() {
-  const totalMembers = useTotalMembers();
-  const todayCount = useTodayAttendanceCount();
-  const recentScans = useRecentScans(8);
+  const { data: scopedLocations } = useScopedLocationIds();
+  const { data: userRole } = useUserRole();
+
+  const totalMembers = useTotalMembers(scopedLocations);
+  const todayCount = useTodayAttendanceCount(undefined, scopedLocations);
+  const recentScans = useRecentScans(8, scopedLocations);
   const services = useServices();
-  const engagement = useEngagementData();
+  const engagement = useEngagementData(scopedLocations);
 
   const memberCount = totalMembers.data ?? 0;
   const presentToday = todayCount.data ?? 0;
@@ -33,11 +37,16 @@ export default function Dashboard() {
     { label: "Absent Today", value: Math.max(0, memberCount - presentToday).toLocaleString(), icon: AlertTriangle, change: "Not yet checked in" },
   ];
 
+  const scopeLabel = userRole ? (userRole.role === "super_admin" ? "All Locations" : roleLabels[userRole.role] || userRole.role) : "";
+
   return (
     <div className="admin-page">
       <div>
         <h1 className="admin-page-title">Dashboard</h1>
-        <p className="admin-page-description">Overview of church attendance and engagement metrics</p>
+        <p className="admin-page-description">
+          Overview of church attendance and engagement metrics
+          {scopeLabel && <span className="ml-2 text-xs text-primary font-medium">({scopeLabel})</span>}
+        </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

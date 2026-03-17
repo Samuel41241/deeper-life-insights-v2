@@ -1,10 +1,11 @@
 import {
   LayoutDashboard, Users, UserPlus, QrCode, ScanLine, History,
-  BarChart3, BellRing, Settings, Network, ChevronDown,
+  BarChart3, BellRing, Settings, Network, ShieldCheck,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { Logo } from "@/components/brand/Logo";
+import { roleNavAccess } from "@/hooks/use-user-role";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -15,44 +16,57 @@ const navSections = [
   {
     label: "Overview",
     items: [
-      { title: "Dashboard", url: "/admin/dashboard", icon: LayoutDashboard },
+      { title: "Dashboard", url: "/admin/dashboard", icon: LayoutDashboard, key: "dashboard" },
     ],
   },
   {
     label: "Organization",
     items: [
-      { title: "Church Hierarchy", url: "/admin/hierarchy", icon: Network },
-      { title: "Members", url: "/admin/members", icon: Users },
-      { title: "Register Member", url: "/admin/members/register", icon: UserPlus },
+      { title: "Church Hierarchy", url: "/admin/hierarchy", icon: Network, key: "hierarchy" },
+      { title: "Members", url: "/admin/members", icon: Users, key: "members" },
+      { title: "Register Member", url: "/admin/members/register", icon: UserPlus, key: "register" },
     ],
   },
   {
     label: "Attendance",
     items: [
-      { title: "QR Card Management", url: "/admin/qr-cards", icon: QrCode },
-      { title: "Attendance Scanner", url: "/admin/scanner", icon: ScanLine },
-      { title: "Attendance History", url: "/admin/attendance", icon: History },
+      { title: "QR Card Management", url: "/admin/qr-cards", icon: QrCode, key: "qr-cards" },
+      { title: "Attendance Scanner", url: "/admin/scanner", icon: ScanLine, key: "scanner" },
+      { title: "Attendance History", url: "/admin/attendance", icon: History, key: "attendance" },
     ],
   },
   {
     label: "Insights",
     items: [
-      { title: "Reports", url: "/admin/reports", icon: BarChart3 },
-      { title: "Engagement & Alerts", url: "/admin/engagement", icon: BellRing },
+      { title: "Reports", url: "/admin/reports", icon: BarChart3, key: "reports" },
+      { title: "Engagement & Alerts", url: "/admin/engagement", icon: BellRing, key: "engagement" },
     ],
   },
   {
     label: "System",
     items: [
-      { title: "Settings", url: "/admin/settings", icon: Settings },
+      { title: "User Management", url: "/admin/users", icon: ShieldCheck, key: "users" },
+      { title: "Settings", url: "/admin/settings", icon: Settings, key: "settings" },
     ],
   },
 ];
 
-export function AdminSidebar() {
+interface AdminSidebarProps {
+  userRole: string;
+}
+
+export function AdminSidebar({ userRole }: AdminSidebarProps) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const allowedKeys = roleNavAccess[userRole] || [];
+
+  const filteredSections = navSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => allowedKeys.includes(item.key)),
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
@@ -60,7 +74,7 @@ export function AdminSidebar() {
         <Logo size={collapsed ? "sm" : "md"} showText={!collapsed} className="text-sidebar-foreground" />
       </SidebarHeader>
       <SidebarContent>
-        {navSections.map((section) => (
+        {filteredSections.map((section) => (
           <SidebarGroup key={section.label}>
             {!collapsed && <SidebarGroupLabel className="text-sidebar-foreground/50 uppercase text-[10px] tracking-wider">{section.label}</SidebarGroupLabel>}
             <SidebarGroupContent>

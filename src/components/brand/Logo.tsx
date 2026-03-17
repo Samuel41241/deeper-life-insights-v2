@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import dlbcLogo from "@/assets/dlbc-logo.png";
 
 interface LogoProps {
   className?: string;
@@ -21,9 +22,11 @@ const textSizeMap = {
 export function Logo({ className, showText = true, size = "md" }: LogoProps) {
   return (
     <div className={cn("flex items-center gap-2", className)}>
-      <div className={cn("rounded-full brand-gradient flex items-center justify-center", sizeMap[size])}>
-        <span className="text-primary-foreground font-heading font-bold text-xs">DL</span>
-      </div>
+      <img
+        src={dlbcLogo}
+        alt="Deeper Life Bible Church"
+        className={cn("rounded-full object-cover", sizeMap[size])}
+      />
       {showText && (
         <div className="flex flex-col leading-tight">
           <span className={cn("font-heading font-bold text-foreground", textSizeMap[size])}>
