@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, UserPlus, QrCode, ScanLine, History,
-  BarChart3, BellRing, Settings, Network, ShieldCheck,
+  BarChart3, BellRing, Settings, Network, ShieldCheck, UserCheck,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -32,6 +32,7 @@ const navSections = [
     items: [
       { title: "QR Card Management", url: "/admin/qr-cards", icon: QrCode, key: "qr-cards" },
       { title: "Attendance Scanner", url: "/admin/scanner", icon: ScanLine, key: "scanner" },
+      { title: "Newcomer Entry", url: "/admin/newcomers", icon: UserCheck, key: "newcomers" },
       { title: "Attendance History", url: "/admin/attendance", icon: History, key: "attendance" },
     ],
   },
