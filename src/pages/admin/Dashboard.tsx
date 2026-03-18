@@ -1,5 +1,6 @@
-import { LayoutDashboard, Users, TrendingUp, TrendingDown, AlertTriangle, Clock, Heart, Eye, BellRing } from "lucide-react";
+import { LayoutDashboard, Users, TrendingUp, TrendingDown, AlertTriangle, Clock, Heart, Eye, BellRing, UserCheck } from "lucide-react";
 import { useTotalMembers, useTodayAttendanceCount, useRecentScans } from "@/hooks/use-attendance";
+import { useTodayNewcomerCount } from "@/hooks/use-newcomers";
 import { useServices } from "@/hooks/use-services";
 import { useEngagementData } from "@/hooks/use-engagement";
 import { useScopedLocationIds, useUserRole, roleLabels } from "@/hooks/use-user-role";
@@ -12,12 +13,15 @@ export default function Dashboard() {
 
   const totalMembers = useTotalMembers(scopedLocations);
   const todayCount = useTodayAttendanceCount(undefined, scopedLocations);
+  const todayNewcomers = useTodayNewcomerCount(undefined, scopedLocations);
   const recentScans = useRecentScans(8, scopedLocations);
   const services = useServices();
   const engagement = useEngagementData(scopedLocations);
 
   const memberCount = totalMembers.data ?? 0;
   const presentToday = todayCount.data ?? 0;
+  const newcomersToday = todayNewcomers.data ?? 0;
+  const totalAttendance = presentToday + newcomersToday;
   const attendanceRate = memberCount > 0 ? ((presentToday / memberCount) * 100).toFixed(1) : "0";
 
   const engCounts = useMemo(() => {
@@ -32,9 +36,9 @@ export default function Dashboard() {
 
   const stats = [
     { label: "Total Members", value: memberCount.toLocaleString(), icon: Users, change: "Active members" },
-    { label: "Present Today", value: presentToday.toLocaleString(), icon: LayoutDashboard, change: `${attendanceRate}% of members` },
-    { label: "Services", value: (services.data?.length ?? 0).toString(), icon: TrendingUp, change: "Configured services" },
-    { label: "Absent Today", value: Math.max(0, memberCount - presentToday).toLocaleString(), icon: AlertTriangle, change: "Not yet checked in" },
+    { label: "Members Present", value: presentToday.toLocaleString(), icon: LayoutDashboard, change: `${attendanceRate}% of members` },
+    { label: "Newcomers Today", value: newcomersToday.toLocaleString(), icon: UserCheck, change: "First-timers" },
+    { label: "Total Attendance", value: totalAttendance.toLocaleString(), icon: TrendingUp, change: `${presentToday} members + ${newcomersToday} newcomers` },
   ];
 
   const scopeLabel = userRole ? (userRole.role === "super_admin" ? "All Locations" : roleLabels[userRole.role] || userRole.role) : "";
