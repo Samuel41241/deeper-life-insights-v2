@@ -104,13 +104,13 @@ export const roleLabels: Record<string, string> = {
 
 // Navigation access by role
 export const roleNavAccess: Record<string, string[]> = {
-  super_admin: ["dashboard", "hierarchy", "members", "register", "qr-cards", "scanner", "attendance", "reports", "engagement", "settings", "users"],
-  state_admin: ["dashboard", "hierarchy", "members", "register", "qr-cards", "scanner", "attendance", "reports", "engagement", "settings"],
-  region_admin: ["dashboard", "hierarchy", "members", "register", "qr-cards", "scanner", "attendance", "reports", "engagement"],
-  group_admin: ["dashboard", "hierarchy", "members", "register", "qr-cards", "scanner", "attendance", "reports", "engagement"],
-  district_admin: ["dashboard", "hierarchy", "members", "register", "qr-cards", "scanner", "attendance", "reports", "engagement"],
-  location_admin: ["dashboard", "members", "register", "qr-cards", "scanner", "attendance", "engagement"],
-  data_officer: ["dashboard", "members", "scanner", "attendance"],
+  super_admin: ["dashboard", "hierarchy", "members", "register", "qr-cards", "scanner", "newcomers", "attendance", "reports", "engagement", "settings", "users"],
+  state_admin: ["dashboard", "hierarchy", "members", "register", "qr-cards", "scanner", "newcomers", "attendance", "reports", "engagement", "settings"],
+  region_admin: ["dashboard", "hierarchy", "members", "register", "qr-cards", "scanner", "newcomers", "attendance", "reports", "engagement"],
+  group_admin: ["dashboard", "hierarchy", "members", "register", "qr-cards", "scanner", "newcomers", "attendance", "reports", "engagement"],
+  district_admin: ["dashboard", "hierarchy", "members", "register", "qr-cards", "scanner", "newcomers", "attendance", "reports", "engagement"],
+  location_admin: ["dashboard", "members", "register", "qr-cards", "scanner", "newcomers", "attendance", "engagement"],
+  data_officer: ["dashboard", "members", "scanner", "newcomers", "attendance"],
 };
 
 export function useAllUserRoles() {

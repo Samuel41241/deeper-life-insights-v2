@@ -45,6 +45,7 @@ const App = () => (
               <Route path="members/register" element={<RegisterMember />} />
               <Route path="qr-cards" element={<QRCards />} />
               <Route path="scanner" element={<AttendanceScanner />} />
+              <Route path="newcomers" element={<NewcomerEntry />} />
               <Route path="attendance" element={<AttendanceHistory />} />
               <Route path="reports" element={<Reports />} />
               <Route path="engagement" element={<Engagement />} />
