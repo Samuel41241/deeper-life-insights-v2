@@ -389,6 +389,69 @@ export type Database = {
           },
         ]
       }
+      newcomers: {
+        Row: {
+          attendance_date: string
+          children_count: number
+          created_at: string
+          created_by: string
+          female_count: number
+          id: string
+          location_id: string
+          male_count: number
+          notes: string | null
+          service_id: string | null
+          total_count: number
+          updated_at: string
+          youth_count: number
+        }
+        Insert: {
+          attendance_date?: string
+          children_count?: number
+          created_at?: string
+          created_by: string
+          female_count?: number
+          id?: string
+          location_id: string
+          male_count?: number
+          notes?: string | null
+          service_id?: string | null
+          total_count?: number
+          updated_at?: string
+          youth_count?: number
+        }
+        Update: {
+          attendance_date?: string
+          children_count?: number
+          created_at?: string
+          created_by?: string
+          female_count?: number
+          id?: string
+          location_id?: string
+          male_count?: number
+          notes?: string | null
+          service_id?: string | null
+          total_count?: number
+          updated_at?: string
+          youth_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "newcomers_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "newcomers_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       regions: {
         Row: {
           created_at: string

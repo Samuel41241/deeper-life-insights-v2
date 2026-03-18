@@ -1,12 +1,14 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { ScanLine, Camera, Usb, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { ScanLine, Camera, Usb, CheckCircle2, XCircle, Loader2, Keyboard } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useServices } from "@/hooks/use-services";
 import { useAllLocations } from "@/hooks/use-hierarchy";
 import { supabase } from "@/integrations/supabase/client";
 import { useRecordAttendance } from "@/hooks/use-attendance";
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import CameraScanner from "@/components/scanner/CameraScanner";
 
 type ScanState = "ready" | "processing" | "success" | "error";
@@ -17,6 +19,7 @@ export default function AttendanceScanner() {
   const [scanState, setScanState] = useState<ScanState>("ready");
   const [resultMessage, setResultMessage] = useState("");
   const [memberName, setMemberName] = useState("");
+  const [manualInput, setManualInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const bufferRef = useRef("");
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -25,6 +28,7 @@ export default function AttendanceScanner() {
   const services = useServices();
   const locations = useAllLocations();
   const recordAttendance = useRecordAttendance();
+  const { toast } = useToast();
 
   const resetToReady = useCallback(() => {
     setScanState("ready");
@@ -48,13 +52,15 @@ export default function AttendanceScanner() {
       return;
     }
     if (scanState === "processing") return;
-    
+
     setScanState("processing");
     const trimmed = qrValue.trim();
     if (!trimmed) { resetToReady(); return; }
 
+    console.log("[Scanner] Processing scan value:", trimmed);
+
     try {
-      // Lookup card
+      // Lookup card by qr_code_value OR card_number
       const { data: card, error: cardErr } = await supabase
         .from("cards")
         .select("*, members(id, full_name, location_id, status)")
@@ -62,7 +68,13 @@ export default function AttendanceScanner() {
         .limit(1)
         .maybeSingle();
 
-      if (cardErr || !card) {
+      if (cardErr) {
+        console.error("[Scanner] Card lookup error:", cardErr);
+        showResult("error", "Error looking up card");
+        return;
+      }
+      if (!card) {
+        console.warn("[Scanner] Card not found for value:", trimmed);
         showResult("error", "Invalid card — not recognized");
         return;
       }
@@ -89,11 +101,13 @@ export default function AttendanceScanner() {
         status: "present",
       });
 
-      showResult("success", "Attendance Confirmed", member.full_name);
+      console.log("[Scanner] Attendance recorded for:", member.full_name);
+      showResult("success", "Present ✓", member.full_name);
     } catch (err: any) {
       if (err.message === "DUPLICATE") {
         showResult("error", "Already checked in for this service");
       } else {
+        console.error("[Scanner] Attendance error:", err);
         showResult("error", "Error recording attendance");
       }
     }
@@ -112,7 +126,6 @@ export default function AttendanceScanner() {
 
   const handleInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     bufferRef.current = e.target.value;
-    // Auto-submit after 100ms of no input (USB scanners type fast)
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       if (bufferRef.current.length > 3) {
@@ -123,6 +136,14 @@ export default function AttendanceScanner() {
       }
     }, 150);
   }, [processScan]);
+
+  // Manual card entry
+  const handleManualSubmit = () => {
+    if (manualInput.trim()) {
+      processScan(manualInput.trim());
+      setManualInput("");
+    }
+  };
 
   // Keep focus on input for USB mode
   useEffect(() => {
@@ -175,55 +196,93 @@ export default function AttendanceScanner() {
       )}
 
       {configReady && (
-        <Tabs defaultValue="usb" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2 h-12">
-            <TabsTrigger value="usb" className="text-base gap-2 h-10">
-              <Usb className="h-4 w-4" /> USB Scanner
-            </TabsTrigger>
-            <TabsTrigger value="camera" className="text-base gap-2 h-10">
-              <Camera className="h-4 w-4" /> Camera
-            </TabsTrigger>
-          </TabsList>
+        <>
+          <Tabs defaultValue="usb" className="w-full">
+            <TabsList className="grid w-full max-w-lg grid-cols-3 h-12">
+              <TabsTrigger value="usb" className="text-base gap-2 h-10">
+                <Usb className="h-4 w-4" /> USB Scanner
+              </TabsTrigger>
+              <TabsTrigger value="camera" className="text-base gap-2 h-10">
+                <Camera className="h-4 w-4" /> Camera
+              </TabsTrigger>
+              <TabsTrigger value="manual" className="text-base gap-2 h-10">
+                <Keyboard className="h-4 w-4" /> Manual
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="usb">
-            <div className="stat-card min-h-[400px] flex flex-col items-center justify-center relative">
-              {/* Hidden input for USB scanner */}
-              <input
-                ref={inputRef}
-                className="absolute opacity-0 w-0 h-0"
-                onKeyDown={handleKeyDown}
-                onChange={handleInput}
-                autoFocus
-                aria-label="QR scanner input"
-              />
-
-              <ScanFeedback
-                state={scanState}
-                message={resultMessage}
-                memberName={memberName}
-                onTapToReset={resetToReady}
-              />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="camera">
-            <div className="stat-card min-h-[400px] flex flex-col items-center justify-center">
-              {scanState === "ready" || scanState === "processing" ? (
-                <CameraScanner
-                  onScan={processScan}
-                  isProcessing={scanState === "processing"}
+            <TabsContent value="usb">
+              <div className="stat-card min-h-[400px] flex flex-col items-center justify-center relative">
+                <input
+                  ref={inputRef}
+                  className="absolute opacity-0 w-0 h-0"
+                  onKeyDown={handleKeyDown}
+                  onChange={handleInput}
+                  autoFocus
+                  aria-label="QR scanner input"
                 />
-              ) : (
                 <ScanFeedback
                   state={scanState}
                   message={resultMessage}
                   memberName={memberName}
                   onTapToReset={resetToReady}
                 />
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="camera">
+              <div className="stat-card min-h-[400px] flex flex-col items-center justify-center">
+                {scanState === "ready" || scanState === "processing" ? (
+                  <CameraScanner
+                    onScan={processScan}
+                    isProcessing={scanState === "processing"}
+                  />
+                ) : (
+                  <ScanFeedback
+                    state={scanState}
+                    message={resultMessage}
+                    memberName={memberName}
+                    onTapToReset={resetToReady}
+                  />
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="manual">
+              <div className="stat-card min-h-[400px] flex flex-col items-center justify-center">
+                {scanState === "ready" || scanState === "processing" ? (
+                  <div className="w-full max-w-md space-y-4 text-center">
+                    <Keyboard className="h-16 w-16 mx-auto text-muted-foreground opacity-50" />
+                    <p className="text-muted-foreground">Enter the card number manually</p>
+                    <div className="flex gap-2">
+                      <Input
+                        value={manualInput}
+                        onChange={(e) => setManualInput(e.target.value)}
+                        placeholder="Card number or QR value"
+                        className="h-14 text-lg text-center"
+                        onKeyDown={(e) => { if (e.key === "Enter") handleManualSubmit(); }}
+                        disabled={scanState === "processing"}
+                      />
+                      <Button
+                        onClick={handleManualSubmit}
+                        disabled={!manualInput.trim() || scanState === "processing"}
+                        className="h-14 px-6"
+                      >
+                        {scanState === "processing" ? <Loader2 className="h-5 w-5 animate-spin" /> : "Submit"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <ScanFeedback
+                    state={scanState}
+                    message={resultMessage}
+                    memberName={memberName}
+                    onTapToReset={resetToReady}
+                  />
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+        </>
       )}
     </div>
   );

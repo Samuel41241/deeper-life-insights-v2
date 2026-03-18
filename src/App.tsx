@@ -22,6 +22,7 @@ import Reports from "./pages/admin/Reports";
 import Engagement from "./pages/admin/Engagement";
 import SettingsPage from "./pages/admin/Settings";
 import UserManagement from "./pages/admin/UserManagement";
+import NewcomerEntry from "./pages/admin/NewcomerEntry";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="members/register" element={<RegisterMember />} />
               <Route path="qr-cards" element={<QRCards />} />
               <Route path="scanner" element={<AttendanceScanner />} />
+              <Route path="newcomers" element={<NewcomerEntry />} />
               <Route path="attendance" element={<AttendanceHistory />} />
               <Route path="reports" element={<Reports />} />
               <Route path="engagement" element={<Engagement />} />

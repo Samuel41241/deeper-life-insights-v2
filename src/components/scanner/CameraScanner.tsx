@@ -18,17 +18,28 @@ export default function CameraScanner({ onScan, isProcessing }: CameraScannerPro
   const startCamera = async () => {
     setError("");
     try {
+      // Clean up any previous instance
+      if (scannerRef.current) {
+        try {
+          await scannerRef.current.stop();
+          scannerRef.current.clear();
+        } catch {}
+        scannerRef.current = null;
+      }
+
       const scanner = new Html5Qrcode(containerId);
       scannerRef.current = scanner;
 
       await scanner.start(
         { facingMode: "environment" },
         {
-          fps: 10,
+          fps: 15,
           qrbox: { width: 250, height: 250 },
           aspectRatio: 1,
+          disableFlip: false,
         },
         (decodedText) => {
+          console.log("[CameraScanner] QR decoded:", decodedText);
           if (decodedText !== lastScanRef.current) {
             lastScanRef.current = decodedText;
             onScan(decodedText);
@@ -40,6 +51,7 @@ export default function CameraScanner({ onScan, isProcessing }: CameraScannerPro
       );
       setStarted(true);
     } catch (err: any) {
+      console.error("[CameraScanner] Start error:", err);
       setError(err?.message || "Camera access denied. Please allow camera permissions.");
     }
   };
@@ -48,7 +60,7 @@ export default function CameraScanner({ onScan, isProcessing }: CameraScannerPro
     return () => {
       if (scannerRef.current) {
         scannerRef.current.stop().catch(() => {});
-        scannerRef.current.clear();
+        try { scannerRef.current.clear(); } catch {}
         scannerRef.current = null;
       }
     };
