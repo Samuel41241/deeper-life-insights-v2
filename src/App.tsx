@@ -23,6 +23,7 @@ import Engagement from "./pages/admin/Engagement";
 import SettingsPage from "./pages/admin/Settings";
 import UserManagement from "./pages/admin/UserManagement";
 import NewcomerEntry from "./pages/admin/NewcomerEntry";
+import Messaging from "./pages/admin/Messaging";
 
 const queryClient = new QueryClient();
 
