@@ -8,6 +8,7 @@ import { PoweredByFooter } from "@/components/brand/PoweredByFooter";
 import { Eye, EyeOff, LogIn, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function Login() {
   const [email, setEmail] = useState("");
