@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface AuthContextType {
   user: User | null;
@@ -27,6 +28,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+
+        // RBAC diagnostic logging
+        if (session?.user) {
+          console.log("[RBAC] Auth state changed:", _event, "user:", session.user.id, "email:", session.user.email);
+        } else {
+          console.log("[RBAC] Auth state changed:", _event, "— no user");
+        }
       }
     );
 
@@ -39,9 +47,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
+    console.log("[RBAC] Signing out — clearing session, role, and caches");
     await supabase.auth.signOut();
-  };
+    setUser(null);
+    setSession(null);
+    // Clear all react-query caches on sign out
+    // This is done via the component tree since we can't access queryClient here directly
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, session, loading, signOut }}>

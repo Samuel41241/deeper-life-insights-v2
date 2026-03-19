@@ -9,13 +9,17 @@ import { useAuth } from "@/hooks/use-auth";
 import { useUserRole, roleLabels } from "@/hooks/use-user-role";
 import { ForcePasswordChange } from "@/components/auth/ForcePasswordChange";
 import { Badge } from "@/components/ui/badge";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function AdminLayout() {
   const { signOut, user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: userRole, isLoading: roleLoading } = useUserRole();
 
   const handleSignOut = async () => {
+    console.log("[RBAC] User initiated sign out — clearing all caches");
+    queryClient.clear(); // Clear all react-query caches
     await signOut();
     navigate("/login");
   };
@@ -45,6 +49,22 @@ export function AdminLayout() {
     );
   }
 
+  // Multiple roles detected
+  if ((userRole as any)?._multipleRoles) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="text-center max-w-md">
+          <ShieldAlert className="h-16 w-16 text-destructive mx-auto mb-4" />
+          <h1 className="text-2xl font-heading font-bold mb-2">Role Conflict Detected</h1>
+          <p className="text-muted-foreground mb-6">
+            Your account has multiple roles assigned. Only one active role per user is allowed. Please contact a system administrator to resolve this.
+          </p>
+          <Button onClick={handleSignOut}>Sign Out</Button>
+        </div>
+      </div>
+    );
+  }
+
   // Account disabled
   if (!userRole.is_active) {
     return (
@@ -65,6 +85,8 @@ export function AdminLayout() {
   if (userRole.must_change_password) {
     return <ForcePasswordChange />;
   }
+
+  console.log("[RBAC] Rendering dashboard for role:", userRole.role, "user:", user?.id);
 
   return (
     <SidebarProvider>
