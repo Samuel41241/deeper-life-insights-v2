@@ -342,12 +342,14 @@ export type Database = {
           category: Database["public"]["Enums"]["member_category"]
           created_at: string
           date_joined: string
+          do_not_contact: boolean
           full_name: string
           gender: string
           id: string
           location_id: string
           passport_photo_url: string | null
           phone: string | null
+          phone_verified: boolean
           status: Database["public"]["Enums"]["member_status"]
           updated_at: string
         }
@@ -356,12 +358,14 @@ export type Database = {
           category: Database["public"]["Enums"]["member_category"]
           created_at?: string
           date_joined?: string
+          do_not_contact?: boolean
           full_name: string
           gender: string
           id?: string
           location_id: string
           passport_photo_url?: string | null
           phone?: string | null
+          phone_verified?: boolean
           status?: Database["public"]["Enums"]["member_status"]
           updated_at?: string
         }
@@ -370,12 +374,14 @@ export type Database = {
           category?: Database["public"]["Enums"]["member_category"]
           created_at?: string
           date_joined?: string
+          do_not_contact?: boolean
           full_name?: string
           gender?: string
           id?: string
           location_id?: string
           passport_photo_url?: string | null
           phone?: string | null
+          phone_verified?: boolean
           status?: Database["public"]["Enums"]["member_status"]
           updated_at?: string
         }
@@ -388,6 +394,200 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      message_logs: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          location_id: string | null
+          member_id: string | null
+          message_body: string
+          phone: string | null
+          provider_message_id: string | null
+          sent_at: string | null
+          service_id: string | null
+          status: string
+          template_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          location_id?: string | null
+          member_id?: string | null
+          message_body: string
+          phone?: string | null
+          provider_message_id?: string | null
+          sent_at?: string | null
+          service_id?: string | null
+          status?: string
+          template_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          location_id?: string | null
+          member_id?: string | null
+          message_body?: string
+          phone?: string | null
+          provider_message_id?: string | null
+          sent_at?: string | null
+          service_id?: string | null
+          status?: string
+          template_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_logs_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_logs_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_logs_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_logs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "message_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_schedules: {
+        Row: {
+          created_at: string
+          day_of_week: string
+          id: string
+          is_active: boolean
+          recipient_rule: string
+          send_time: string
+          service_id: string | null
+          template_id: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          day_of_week: string
+          id?: string
+          is_active?: boolean
+          recipient_rule?: string
+          send_time: string
+          service_id?: string | null
+          template_id: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          day_of_week?: string
+          id?: string
+          is_active?: boolean
+          recipient_rule?: string
+          send_time?: string
+          service_id?: string | null
+          template_id?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_schedules_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_schedules_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "message_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_templates: {
+        Row: {
+          body: string
+          channel: string
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          target_type: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          channel?: string
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          target_type?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          channel?: string
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          target_type?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      messaging_settings: {
+        Row: {
+          created_at: string
+          default_timezone: string
+          enabled: boolean
+          id: string
+          provider_name: string
+          sender_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_timezone?: string
+          enabled?: boolean
+          id?: string
+          provider_name?: string
+          sender_name?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_timezone?: string
+          enabled?: boolean
+          id?: string
+          provider_name?: string
+          sender_name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       newcomers: {
         Row: {
