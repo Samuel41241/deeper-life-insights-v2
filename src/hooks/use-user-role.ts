@@ -22,15 +22,42 @@ export function useUserRole() {
     queryKey: ["user-role", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
+      // Fetch all roles for this user to enforce single-role rule
       const { data, error } = await supabase
         .from("user_roles")
         .select("*")
-        .eq("user_id", user!.id)
-        .maybeSingle();
+        .eq("user_id", user!.id);
       if (error) throw error;
-      return data as UserRoleData | null;
+
+      if (!data || data.length === 0) {
+        console.warn("[RBAC] No role found for user:", user!.id);
+        return null;
+      }
+
+      if (data.length > 1) {
+        console.error("[RBAC] MULTIPLE ROLES detected for user:", user!.id, "roles:", data.map(r => r.role));
+        // Return a special marker — the UI will block access
+        return { ...data[0], _multipleRoles: true } as UserRoleData & { _multipleRoles?: boolean };
+      }
+
+      const role = data[0] as UserRoleData;
+
+      // RBAC diagnostic logging
+      console.log("[RBAC] Resolved role:", {
+        user_id: role.user_id,
+        role: role.role,
+        state_id: role.state_id,
+        region_id: role.region_id,
+        group_district_id: role.group_district_id,
+        district_id: role.district_id,
+        location_id: role.location_id,
+        is_active: role.is_active,
+      });
+
+      return role;
     },
-    staleTime: 300000,
+    staleTime: 0, // Always fetch fresh on login/session restore
+    gcTime: 60000,
   });
 }
 
@@ -104,7 +131,7 @@ export const roleLabels: Record<string, string> = {
 
 // Navigation access by role
 export const roleNavAccess: Record<string, string[]> = {
-  super_admin: ["dashboard", "hierarchy", "members", "register", "qr-cards", "scanner", "newcomers", "attendance", "reports", "engagement", "settings", "users"],
+  super_admin: ["dashboard", "hierarchy", "members", "register", "qr-cards", "scanner", "newcomers", "attendance", "reports", "engagement", "settings", "users", "messaging"],
   state_admin: ["dashboard", "hierarchy", "members", "register", "qr-cards", "scanner", "newcomers", "attendance", "reports", "engagement", "settings"],
   region_admin: ["dashboard", "hierarchy", "members", "register", "qr-cards", "scanner", "newcomers", "attendance", "reports", "engagement"],
   group_admin: ["dashboard", "hierarchy", "members", "register", "qr-cards", "scanner", "newcomers", "attendance", "reports", "engagement"],

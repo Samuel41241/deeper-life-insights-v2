@@ -23,6 +23,7 @@ import Engagement from "./pages/admin/Engagement";
 import SettingsPage from "./pages/admin/Settings";
 import UserManagement from "./pages/admin/UserManagement";
 import NewcomerEntry from "./pages/admin/NewcomerEntry";
+import Messaging from "./pages/admin/Messaging";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +52,7 @@ const App = () => (
               <Route path="engagement" element={<Engagement />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="users" element={<UserManagement />} />
+              <Route path="messaging" element={<Messaging />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

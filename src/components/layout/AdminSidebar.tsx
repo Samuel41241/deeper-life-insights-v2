@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, UserPlus, QrCode, ScanLine, History,
-  BarChart3, BellRing, Settings, Network, ShieldCheck, UserCheck,
+  BarChart3, BellRing, Settings, Network, ShieldCheck, UserCheck, MessageSquare,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -41,6 +41,12 @@ const navSections = [
     items: [
       { title: "Reports", url: "/admin/reports", icon: BarChart3, key: "reports" },
       { title: "Engagement & Alerts", url: "/admin/engagement", icon: BellRing, key: "engagement" },
+    ],
+  },
+  {
+    label: "Communication",
+    items: [
+      { title: "Messaging", url: "/admin/messaging", icon: MessageSquare, key: "messaging" },
     ],
   },
   {

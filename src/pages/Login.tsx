@@ -8,6 +8,7 @@ import { PoweredByFooter } from "@/components/brand/PoweredByFooter";
 import { Eye, EyeOff, LogIn, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -18,14 +19,19 @@ export default function Login() {
   const [resetSent, setResetSent] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password) return;
     setLoading(true);
     try {
+      // Clear any stale caches before login
+      queryClient.clear();
+      console.log("[RBAC] Login attempt for:", email.trim());
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) throw error;
+      console.log("[RBAC] Login successful — navigating to dashboard");
       navigate("/admin/dashboard");
     } catch (err: any) {
       toast({ title: "Login failed", description: err.message, variant: "destructive" });
