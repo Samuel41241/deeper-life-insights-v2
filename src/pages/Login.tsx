@@ -26,8 +26,12 @@ export default function Login() {
     if (!email.trim() || !password) return;
     setLoading(true);
     try {
+      // Clear any stale caches before login
+      queryClient.clear();
+      console.log("[RBAC] Login attempt for:", email.trim());
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) throw error;
+      console.log("[RBAC] Login successful — navigating to dashboard");
       navigate("/admin/dashboard");
     } catch (err: any) {
       toast({ title: "Login failed", description: err.message, variant: "destructive" });
