@@ -52,6 +52,7 @@ const App = () => (
               <Route path="engagement" element={<Engagement />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="users" element={<UserManagement />} />
+              <Route path="messaging" element={<Messaging />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
