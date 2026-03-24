@@ -1,13 +1,18 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Users, Search, Plus, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
 import { useMembers } from "@/hooks/use-members";
 import { useAllLocations } from "@/hooks/use-hierarchy";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Constants } from "@/integrations/supabase/types";
+import { useScopedLocationIds, useUserRole } from "@/hooks/use-user-role";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const categoryLabels: Record<string, string> = {
   adult_male: "Adult Male",
@@ -28,18 +33,77 @@ const statusColors: Record<string, string> = {
 export default function Members() {
   const [search, setSearch] = useState("");
   const [locationFilter, setLocationFilter] = useState<string>("");
-  const members = useMembers(search || undefined, locationFilter || undefined);
+
+  const { data: userRole, isLoading: roleLoading } = useUserRole();
+  const { data: scopedLocations, isLoading: scopeLoading } = useScopedLocationIds();
+
+  const hasRoleError =
+    !!(userRole as any)?._multipleRoles || !!(userRole as any)?._scopeError;
+
+  const effectiveScopedLocations =
+    userRole?.role === "super_admin" ? null : scopedLocations ?? [];
+
+  const members = useMembers(
+    search || undefined,
+    locationFilter || undefined,
+    effectiveScopedLocations
+  );
+
   const locations = useAllLocations();
+
+  const visibleLocations = useMemo(() => {
+    if (!locations.data) return [];
+    if (effectiveScopedLocations === null) return locations.data; // super_admin
+    if (!effectiveScopedLocations || effectiveScopedLocations.length === 0) return [];
+    return locations.data.filter((loc) => effectiveScopedLocations.includes(loc.id));
+  }, [locations.data, effectiveScopedLocations]);
+
+  if (roleLoading || scopeLoading) {
+    return (
+      <div className="admin-page">
+        <h1 className="admin-page-title">Members</h1>
+        <p className="admin-page-description">Loading members...</p>
+      </div>
+    );
+  }
+
+  if (!userRole) {
+    return (
+      <div className="admin-page">
+        <h1 className="admin-page-title">Access Error</h1>
+        <p className="admin-page-description">
+          No role is assigned to this account. Please contact the system administrator.
+        </p>
+      </div>
+    );
+  }
+
+  if (hasRoleError) {
+    return (
+      <div className="admin-page">
+        <h1 className="admin-page-title">Access Error</h1>
+        <p className="admin-page-description">
+          {(userRole as any)?._scopeError ||
+            "Invalid role configuration detected. Please contact the system administrator."}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-page">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="admin-page-title">Members</h1>
-          <p className="admin-page-description">{members.data?.length ?? 0} members found</p>
+          <p className="admin-page-description">
+            {members.data?.length ?? 0} members found
+          </p>
         </div>
+
         <Link to="/admin/members/register">
-          <Button><Plus className="mr-2 h-4 w-4" /> Register Member</Button>
+          <Button>
+            <Plus className="mr-2 h-4 w-4" /> Register Member
+          </Button>
         </Link>
       </div>
 
@@ -53,14 +117,20 @@ export default function Members() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Select value={locationFilter} onValueChange={(v) => setLocationFilter(v === "all" ? "" : v)}>
+
+        <Select
+          value={locationFilter}
+          onValueChange={(v) => setLocationFilter(v === "all" ? "" : v)}
+        >
           <SelectTrigger className="w-full sm:w-[220px] h-11">
             <SelectValue placeholder="All Locations" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Locations</SelectItem>
-            {locations.data?.map((loc) => (
-              <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+            {visibleLocations.map((loc) => (
+              <SelectItem key={loc.id} value={loc.id}>
+                {loc.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -83,23 +153,34 @@ export default function Members() {
             {members.data?.map((m) => (
               <tr key={m.id} className="border-b last:border-0 hover:bg-muted/50">
                 <td className="py-3 font-medium">{m.full_name}</td>
-                <td className="py-3 text-muted-foreground">{categoryLabels[m.category] || m.category}</td>
-                <td className="py-3 text-muted-foreground">{(m as any).locations?.name || "—"}</td>
+                <td className="py-3 text-muted-foreground">
+                  {categoryLabels[m.category] || m.category}
+                </td>
+                <td className="py-3 text-muted-foreground">
+                  {(m as any).locations?.name || "—"}
+                </td>
                 <td className="py-3 text-muted-foreground">{m.phone || "—"}</td>
                 <td className="py-3">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusColors[m.status] || ""}`}>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                      statusColors[m.status] || ""
+                    }`}
+                  >
                     {m.status}
                   </span>
                 </td>
                 <td className="py-3">
                   <Link to={`/admin/members/${m.id}`}>
-                    <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon">
+                      <Eye className="h-4 w-4" />
+                    </Button>
                   </Link>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+
         {members.data?.length === 0 && (
           <div className="py-12 text-center text-muted-foreground">
             <Users className="h-10 w-10 mx-auto mb-3 opacity-40" />
@@ -116,19 +197,34 @@ export default function Members() {
             <p>No members found</p>
           </div>
         )}
+
         {members.data?.map((m) => (
           <Link key={m.id} to={`/admin/members/${m.id}`} className="block">
             <div className="stat-card flex items-center gap-4">
               <div className="h-10 w-10 rounded-full brand-gradient flex items-center justify-center shrink-0">
                 <span className="text-primary-foreground text-xs font-bold">
-                  {m.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                  {m.full_name
+                    .split(" ")
+                    .map((n) => n[0])
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase()}
                 </span>
               </div>
+
               <div className="min-w-0 flex-1">
                 <p className="font-medium truncate">{m.full_name}</p>
-                <p className="text-xs text-muted-foreground">{(m as any).locations?.name || "—"} · {categoryLabels[m.category] || m.category}</p>
+                <p className="text-xs text-muted-foreground">
+                  {(m as any).locations?.name || "—"} ·{" "}
+                  {categoryLabels[m.category] || m.category}
+                </p>
               </div>
-              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium shrink-0 ${statusColors[m.status] || ""}`}>
+
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium shrink-0 ${
+                  statusColors[m.status] || ""
+                }`}
+              >
                 {m.status}
               </span>
             </div>

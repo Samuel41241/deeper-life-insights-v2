@@ -25,7 +25,7 @@ export interface MessageSchedule {
   created_at: string;
   updated_at: string;
   message_templates?: MessageTemplate;
-  services?: { name: string } | null;
+  services?: { name: string; location_id?: string | null } | null;
 }
 
 export interface MessageLog {
@@ -73,7 +73,16 @@ export function useMessageTemplates() {
 export function useUpdateTemplate() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: { id: string; title?: string; body?: string; is_active?: boolean; target_type?: string }) => {
+    mutationFn: async ({
+      id,
+      ...values
+    }: {
+      id: string;
+      title?: string;
+      body?: string;
+      is_active?: boolean;
+      target_type?: string;
+    }) => {
       const { error } = await (supabase as any)
         .from("message_templates")
         .update(values)
@@ -87,7 +96,13 @@ export function useUpdateTemplate() {
 export function useCreateTemplate() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: { code: string; title: string; body: string; target_type: string; channel?: string }) => {
+    mutationFn: async (values: {
+      code: string;
+      title: string;
+      body: string;
+      target_type: string;
+      channel?: string;
+    }) => {
       const { data, error } = await (supabase as any)
         .from("message_templates")
         .insert({ ...values, channel: values.channel || "sms" })
@@ -101,14 +116,22 @@ export function useCreateTemplate() {
 }
 
 // Schedules
-export function useMessageSchedules() {
+export function useMessageSchedules(scopedServiceIds?: string[] | null) {
   return useQuery({
-    queryKey: ["message-schedules"],
+    queryKey: ["message-schedules", scopedServiceIds],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      let query = (supabase as any)
         .from("message_schedules")
-        .select("*, message_templates(title, code), services(name)")
+        .select("*, message_templates(title, code), services(name, location_id)")
         .order("day_of_week");
+
+      if (scopedServiceIds && scopedServiceIds.length > 0) {
+        query = query.in("service_id", scopedServiceIds);
+      } else if (scopedServiceIds && scopedServiceIds.length === 0) {
+        return [];
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data as MessageSchedule[];
     },
@@ -145,7 +168,15 @@ export function useCreateSchedule() {
 export function useUpdateSchedule() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: { id: string; is_active?: boolean; send_time?: string; day_of_week?: string }) => {
+    mutationFn: async ({
+      id,
+      ...values
+    }: {
+      id: string;
+      is_active?: boolean;
+      send_time?: string;
+      day_of_week?: string;
+    }) => {
       const { error } = await (supabase as any)
         .from("message_schedules")
         .update(values)
@@ -171,15 +202,23 @@ export function useDeleteSchedule() {
 }
 
 // Logs
-export function useMessageLogs(limit = 100) {
+export function useMessageLogs(limit = 100, scopedLocationIds?: string[] | null) {
   return useQuery({
-    queryKey: ["message-logs", limit],
+    queryKey: ["message-logs", limit, scopedLocationIds],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      let query = (supabase as any)
         .from("message_logs")
         .select("*, members(full_name), message_templates(title)")
         .order("created_at", { ascending: false })
         .limit(limit);
+
+      if (scopedLocationIds && scopedLocationIds.length > 0) {
+        query = query.in("location_id", scopedLocationIds);
+      } else if (scopedLocationIds && scopedLocationIds.length === 0) {
+        return [];
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data as MessageLog[];
     },
@@ -205,7 +244,13 @@ export function useMessagingSettings() {
 export function useUpsertMessagingSettings() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: { provider_name?: string; sender_name?: string; default_timezone?: string; enabled?: boolean; id?: string }) => {
+    mutationFn: async (values: {
+      provider_name?: string;
+      sender_name?: string;
+      default_timezone?: string;
+      enabled?: boolean;
+      id?: string;
+    }) => {
       if (values.id) {
         const { id, ...rest } = values;
         const { error } = await (supabase as any)
@@ -230,7 +275,12 @@ export function useUpsertMessagingSettings() {
 export function useSendTestMessage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: { template_id: string; phone: string; member_id?: string; location_id?: string }) => {
+    mutationFn: async (values: {
+      template_id: string;
+      phone: string;
+      member_id?: string;
+      location_id?: string;
+    }) => {
       const res = await supabase.functions.invoke("send-sms", {
         body: {
           mode: "test",

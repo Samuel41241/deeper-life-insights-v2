@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export function useRecordAttendance() {
   const qc = useQueryClient();
+
   return useMutation({
     mutationFn: async (values: {
       member_id: string;
@@ -22,12 +23,14 @@ export function useRecordAttendance() {
         })
         .select("*, members(full_name)")
         .single();
+
       if (error) {
         if (error.code === "23505") {
           throw new Error("DUPLICATE");
         }
         throw error;
       }
+
       return data;
     },
     onSuccess: () => {
@@ -37,18 +40,25 @@ export function useRecordAttendance() {
   });
 }
 
-export function useLookupCard(qrValue: string) {
+export function useLookupCard(qrValue: string, scopedLocationIds?: string[] | null) {
   return useQuery({
-    queryKey: ["card-lookup", qrValue],
+    queryKey: ["card-lookup", qrValue, scopedLocationIds],
     enabled: !!qrValue,
     staleTime: 30000,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("cards")
-        .select("*, members(id, full_name, location_id, status, locations(name))")
+        .select("*, members!inner(id, full_name, location_id, status, locations(name))")
         .or(`qr_code_value.eq.${qrValue},card_number.eq.${qrValue}`)
-        .eq("status", "active")
-        .single();
+        .eq("status", "active");
+
+      if (scopedLocationIds && scopedLocationIds.length > 0) {
+        q = q.in("members.location_id", scopedLocationIds);
+      } else if (scopedLocationIds && scopedLocationIds.length === 0) {
+        return null;
+      }
+
+      const { data, error } = await q.single();
       if (error) throw error;
       return data;
     },
@@ -60,6 +70,7 @@ export function useAttendanceHistory(filters: {
   serviceId?: string;
   locationId?: string;
   search?: string;
+  scopedLocationIds?: string[] | null;
 }) {
   return useQuery({
     queryKey: ["attendance", filters],
@@ -72,7 +83,15 @@ export function useAttendanceHistory(filters: {
 
       if (filters.date) q = q.eq("date", filters.date);
       if (filters.serviceId) q = q.eq("service_id", filters.serviceId);
-      if (filters.locationId) q = q.eq("location_id", filters.locationId);
+
+      // explicit location filter takes priority
+      if (filters.locationId) {
+        q = q.eq("location_id", filters.locationId);
+      } else if (filters.scopedLocationIds && filters.scopedLocationIds.length > 0) {
+        q = q.in("location_id", filters.scopedLocationIds);
+      } else if (filters.scopedLocationIds && filters.scopedLocationIds.length === 0) {
+        return [];
+      }
 
       const { data, error } = await q;
       if (error) throw error;
@@ -83,14 +102,19 @@ export function useAttendanceHistory(filters: {
           r.members?.full_name?.toLowerCase().includes(s)
         );
       }
+
       return data;
     },
   });
 }
 
 // scopedLocationIds: null = all, string[] = filter to these locations
-export function useTodayAttendanceCount(serviceId?: string, scopedLocationIds?: string[] | null) {
+export function useTodayAttendanceCount(
+  serviceId?: string,
+  scopedLocationIds?: string[] | null
+) {
   const today = new Date().toISOString().split("T")[0];
+
   return useQuery({
     queryKey: ["dashboard-stats", "today-attendance", today, serviceId, scopedLocationIds],
     queryFn: async () => {
@@ -98,12 +122,15 @@ export function useTodayAttendanceCount(serviceId?: string, scopedLocationIds?: 
         .from("attendance")
         .select("id", { count: "exact", head: true })
         .eq("date", today);
+
       if (serviceId) q = q.eq("service_id", serviceId);
+
       if (scopedLocationIds && scopedLocationIds.length > 0) {
         q = q.in("location_id", scopedLocationIds);
       } else if (scopedLocationIds && scopedLocationIds.length === 0) {
-        return 0; // no access
+        return 0;
       }
+
       const { count, error } = await q;
       if (error) throw error;
       return count || 0;
@@ -119,11 +146,13 @@ export function useTotalMembers(scopedLocationIds?: string[] | null) {
         .from("members")
         .select("id", { count: "exact", head: true })
         .eq("status", "active");
+
       if (scopedLocationIds && scopedLocationIds.length > 0) {
         q = q.in("location_id", scopedLocationIds);
       } else if (scopedLocationIds && scopedLocationIds.length === 0) {
         return 0;
       }
+
       const { count, error } = await q;
       if (error) throw error;
       return count || 0;
@@ -133,6 +162,7 @@ export function useTotalMembers(scopedLocationIds?: string[] | null) {
 
 export function useRecentScans(limit = 10, scopedLocationIds?: string[] | null) {
   const today = new Date().toISOString().split("T")[0];
+
   return useQuery({
     queryKey: ["dashboard-stats", "recent-scans", today, scopedLocationIds],
     refetchInterval: 5000,
@@ -143,11 +173,13 @@ export function useRecentScans(limit = 10, scopedLocationIds?: string[] | null) 
         .eq("date", today)
         .order("check_in_time", { ascending: false })
         .limit(limit);
+
       if (scopedLocationIds && scopedLocationIds.length > 0) {
         q = q.in("location_id", scopedLocationIds);
       } else if (scopedLocationIds && scopedLocationIds.length === 0) {
         return [];
       }
+
       const { data, error } = await q;
       if (error) throw error;
       return data;

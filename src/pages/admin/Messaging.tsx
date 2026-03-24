@@ -1,5 +1,13 @@
-import { useState } from "react";
-import { MessageSquare, FileText, Clock, ScrollText, Settings, Send, Plus, Trash2, Power, PowerOff } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import {
+  FileText,
+  Clock,
+  ScrollText,
+  Settings,
+  Send,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,21 +15,44 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
-  useMessageTemplates, useUpdateTemplate, useCreateTemplate,
-  useMessageSchedules, useCreateSchedule, useUpdateSchedule, useDeleteSchedule,
+  useMessageTemplates,
+  useUpdateTemplate,
+  useMessageSchedules,
+  useCreateSchedule,
+  useUpdateSchedule,
+  useDeleteSchedule,
   useMessageLogs,
-  useMessagingSettings, useUpsertMessagingSettings,
+  useMessagingSettings,
+  useUpsertMessagingSettings,
   useSendTestMessage,
 } from "@/hooks/use-messaging";
 import { useServices } from "@/hooks/use-services";
+import { useScopedLocationIds, useUserRole } from "@/hooks/use-user-role";
 
 const dayLabels: Record<string, string> = {
-  sunday: "Sunday", monday: "Monday", tuesday: "Tuesday", wednesday: "Wednesday",
-  thursday: "Thursday", friday: "Friday", saturday: "Saturday",
+  sunday: "Sunday",
+  monday: "Monday",
+  tuesday: "Tuesday",
+  wednesday: "Wednesday",
+  thursday: "Thursday",
+  friday: "Friday",
+  saturday: "Saturday",
 };
 
 const recipientRuleLabels: Record<string, string> = {
@@ -37,29 +68,114 @@ const statusColors: Record<string, string> = {
 };
 
 export default function Messaging() {
-  const { toast } = useToast();
+  const { data: userRole, isLoading: roleLoading } = useUserRole();
+  const { data: scopedLocations, isLoading: scopeLoading } = useScopedLocationIds();
+  const services = useServices();
+
+  const hasRoleError =
+    !!(userRole as any)?._multipleRoles || !!(userRole as any)?._scopeError;
+
+  const effectiveScopedLocations =
+    userRole?.role === "super_admin" ? null : scopedLocations ?? [];
+
+  const scopedServices = useMemo(() => {
+    const allServices = services.data || [];
+    if (effectiveScopedLocations === null) return allServices;
+    if (!effectiveScopedLocations || effectiveScopedLocations.length === 0) return [];
+    return allServices.filter((s: any) => {
+      if (!s.location_id) return true;
+      return effectiveScopedLocations.includes(s.location_id);
+    });
+  }, [services.data, effectiveScopedLocations]);
+
+  const scopedServiceIds = useMemo(() => {
+    return scopedServices.map((s: any) => s.id);
+  }, [scopedServices]);
+
+  if (roleLoading || scopeLoading || services.isLoading) {
+    return (
+      <div className="admin-page">
+        <h1 className="admin-page-title">Messaging</h1>
+        <p className="admin-page-description">Loading messaging...</p>
+      </div>
+    );
+  }
+
+  if (!userRole) {
+    return (
+      <div className="admin-page">
+        <h1 className="admin-page-title">Access Error</h1>
+        <p className="admin-page-description">
+          No role is assigned to this account. Please contact the system administrator.
+        </p>
+      </div>
+    );
+  }
+
+  if (hasRoleError) {
+    return (
+      <div className="admin-page">
+        <h1 className="admin-page-title">Access Error</h1>
+        <p className="admin-page-description">
+          {(userRole as any)?._scopeError ||
+            "Invalid role configuration detected. Please contact the system administrator."}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-page">
       <div>
         <h1 className="admin-page-title">Messaging</h1>
-        <p className="admin-page-description">Automated SMS messaging, templates, schedules, and delivery logs</p>
+        <p className="admin-page-description">
+          Automated SMS messaging, templates, schedules, and delivery logs
+        </p>
       </div>
 
       <Tabs defaultValue="templates">
         <TabsList className="w-full justify-start flex-wrap h-auto gap-1">
-          <TabsTrigger value="templates"><FileText className="h-3.5 w-3.5 mr-1.5" />Templates</TabsTrigger>
-          <TabsTrigger value="schedules"><Clock className="h-3.5 w-3.5 mr-1.5" />Schedules</TabsTrigger>
-          <TabsTrigger value="logs"><ScrollText className="h-3.5 w-3.5 mr-1.5" />Logs</TabsTrigger>
-          <TabsTrigger value="settings"><Settings className="h-3.5 w-3.5 mr-1.5" />Settings</TabsTrigger>
-          <TabsTrigger value="send"><Send className="h-3.5 w-3.5 mr-1.5" />Manual Send</TabsTrigger>
+          <TabsTrigger value="templates">
+            <FileText className="h-3.5 w-3.5 mr-1.5" />
+            Templates
+          </TabsTrigger>
+          <TabsTrigger value="schedules">
+            <Clock className="h-3.5 w-3.5 mr-1.5" />
+            Schedules
+          </TabsTrigger>
+          <TabsTrigger value="logs">
+            <ScrollText className="h-3.5 w-3.5 mr-1.5" />
+            Logs
+          </TabsTrigger>
+          <TabsTrigger value="settings">
+            <Settings className="h-3.5 w-3.5 mr-1.5" />
+            Settings
+          </TabsTrigger>
+          <TabsTrigger value="send">
+            <Send className="h-3.5 w-3.5 mr-1.5" />
+            Manual Send
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="templates" className="mt-4"><TemplatesTab /></TabsContent>
-        <TabsContent value="schedules" className="mt-4"><SchedulesTab /></TabsContent>
-        <TabsContent value="logs" className="mt-4"><LogsTab /></TabsContent>
-        <TabsContent value="settings" className="mt-4"><SettingsTab /></TabsContent>
-        <TabsContent value="send" className="mt-4"><ManualSendTab /></TabsContent>
+        <TabsContent value="templates" className="mt-4">
+          <TemplatesTab />
+        </TabsContent>
+
+        <TabsContent value="schedules" className="mt-4">
+          <SchedulesTab scopedServices={scopedServices} scopedServiceIds={scopedServiceIds} />
+        </TabsContent>
+
+        <TabsContent value="logs" className="mt-4">
+          <LogsTab scopedLocationIds={effectiveScopedLocations} />
+        </TabsContent>
+
+        <TabsContent value="settings" className="mt-4">
+          <SettingsTab isSuperAdmin={userRole.role === "super_admin"} />
+        </TabsContent>
+
+        <TabsContent value="send" className="mt-4">
+          <ManualSendTab scopedLocationIds={effectiveScopedLocations} />
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -82,7 +198,11 @@ function TemplatesTab() {
   const saveEdit = async () => {
     if (!editId) return;
     try {
-      await updateTemplate.mutateAsync({ id: editId, body: editBody, title: editTitle });
+      await updateTemplate.mutateAsync({
+        id: editId,
+        body: editBody,
+        title: editTitle,
+      });
       toast({ title: "Template updated" });
       setEditId(null);
     } catch (err: any) {
@@ -101,27 +221,43 @@ function TemplatesTab() {
 
   return (
     <div className="space-y-3">
-      {templates.isLoading && <p className="text-muted-foreground text-center py-8">Loading templates...</p>}
+      {templates.isLoading && (
+        <p className="text-muted-foreground text-center py-8">Loading templates...</p>
+      )}
+
       {templates.data?.map((t) => (
         <div key={t.id} className="stat-card">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <h3 className="font-medium">{t.title}</h3>
-              <Badge variant="outline" className="text-xs">{t.code}</Badge>
-              <Badge variant="outline" className="text-xs">{recipientRuleLabels[t.target_type] || t.target_type}</Badge>
+              <Badge variant="outline" className="text-xs">
+                {t.code}
+              </Badge>
+              <Badge variant="outline" className="text-xs">
+                {recipientRuleLabels[t.target_type] || t.target_type}
+              </Badge>
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={t.is_active} onCheckedChange={() => toggleActive(t)} />
-              <Button variant="outline" size="sm" onClick={() => startEdit(t)}>Edit</Button>
+              <Button variant="outline" size="sm" onClick={() => startEdit(t)}>
+                Edit
+              </Button>
             </div>
           </div>
           <p className="text-sm text-muted-foreground">{t.body}</p>
         </div>
       ))}
 
-      <Dialog open={!!editId} onOpenChange={(open) => { if (!open) setEditId(null); }}>
+      <Dialog
+        open={!!editId}
+        onOpenChange={(open) => {
+          if (!open) setEditId(null);
+        }}
+      >
         <DialogContent>
-          <DialogHeader><DialogTitle>Edit Template</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Edit Template</DialogTitle>
+          </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Title</Label>
@@ -134,8 +270,12 @@ function TemplatesTab() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditId(null)}>Cancel</Button>
-            <Button onClick={saveEdit} disabled={updateTemplate.isPending}>Save</Button>
+            <Button variant="outline" onClick={() => setEditId(null)}>
+              Cancel
+            </Button>
+            <Button onClick={saveEdit} disabled={updateTemplate.isPending}>
+              Save
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -143,10 +283,15 @@ function TemplatesTab() {
   );
 }
 
-function SchedulesTab() {
-  const schedules = useMessageSchedules();
+function SchedulesTab({
+  scopedServices,
+  scopedServiceIds,
+}: {
+  scopedServices: any[];
+  scopedServiceIds: string[];
+}) {
+  const schedules = useMessageSchedules(scopedServiceIds.length ? scopedServiceIds : []);
   const templates = useMessageTemplates();
-  const services = useServices();
   const createSchedule = useCreateSchedule();
   const updateSchedule = useUpdateSchedule();
   const deleteSchedule = useDeleteSchedule();
@@ -164,6 +309,12 @@ function SchedulesTab() {
       toast({ title: "Fill all required fields", variant: "destructive" });
       return;
     }
+
+    if (serviceId && !scopedServiceIds.includes(serviceId)) {
+      toast({ title: "Selected service is outside your scope", variant: "destructive" });
+      return;
+    }
+
     try {
       await createSchedule.mutateAsync({
         template_id: templateId,
@@ -174,7 +325,11 @@ function SchedulesTab() {
       });
       toast({ title: "Schedule created" });
       setDialogOpen(false);
-      setTemplateId(""); setDayOfWeek(""); setSendTime("16:00"); setRecipientRule("all_active"); setServiceId("");
+      setTemplateId("");
+      setDayOfWeek("");
+      setSendTime("16:00");
+      setRecipientRule("all_active");
+      setServiceId("");
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     }
@@ -208,6 +363,7 @@ function SchedulesTab() {
       </div>
 
       {schedules.isLoading && <p className="text-muted-foreground text-center py-8">Loading...</p>}
+
       {schedules.data?.length === 0 && !schedules.isLoading && (
         <div className="stat-card py-12 text-center text-muted-foreground">
           <Clock className="h-10 w-10 mx-auto mb-3 opacity-40" />
@@ -234,7 +390,12 @@ function SchedulesTab() {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Switch checked={s.is_active} onCheckedChange={() => toggleSchedule(s)} />
-            <Button variant="ghost" size="icon" onClick={() => handleDelete(s.id)} className="text-muted-foreground hover:text-destructive">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleDelete(s.id)}
+              className="text-muted-foreground hover:text-destructive"
+            >
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
@@ -243,61 +404,93 @@ function SchedulesTab() {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add Message Schedule</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Add Message Schedule</DialogTitle>
+          </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Template *</Label>
               <Select value={templateId} onValueChange={setTemplateId}>
-                <SelectTrigger className="h-11"><SelectValue placeholder="Select template" /></SelectTrigger>
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder="Select template" />
+                </SelectTrigger>
                 <SelectContent>
-                  {templates.data?.filter(t => t.is_active).map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>
+                  {templates.data?.filter((t) => t.is_active).map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.title}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
               <Label>Day of Week *</Label>
               <Select value={dayOfWeek} onValueChange={setDayOfWeek}>
-                <SelectTrigger className="h-11"><SelectValue placeholder="Select day" /></SelectTrigger>
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder="Select day" />
+                </SelectTrigger>
                 <SelectContent>
                   {Object.entries(dayLabels).map(([v, l]) => (
-                    <SelectItem key={v} value={v}>{l}</SelectItem>
+                    <SelectItem key={v} value={v}>
+                      {l}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
               <Label>Send Time (WAT) *</Label>
-              <Input type="time" value={sendTime} onChange={(e) => setSendTime(e.target.value)} className="h-11" />
+              <Input
+                type="time"
+                value={sendTime}
+                onChange={(e) => setSendTime(e.target.value)}
+                className="h-11"
+              />
             </div>
+
             <div className="space-y-2">
               <Label>Recipient Rule *</Label>
               <Select value={recipientRule} onValueChange={setRecipientRule}>
-                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {Object.entries(recipientRuleLabels).map(([v, l]) => (
-                    <SelectItem key={v} value={v}>{l}</SelectItem>
+                    <SelectItem key={v} value={v}>
+                      {l}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
               <Label>Linked Service (optional)</Label>
               <Select value={serviceId} onValueChange={(v) => setServiceId(v === "none" ? "" : v)}>
-                <SelectTrigger className="h-11"><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">None</SelectItem>
-                  {services.data?.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  {scopedServices.map((s: any) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={createSchedule.isPending || !templateId || !dayOfWeek}>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreate}
+              disabled={createSchedule.isPending || !templateId || !dayOfWeek}
+            >
               {createSchedule.isPending ? "Creating..." : "Create Schedule"}
             </Button>
           </DialogFooter>
@@ -307,13 +500,14 @@ function SchedulesTab() {
   );
 }
 
-function LogsTab() {
-  const logs = useMessageLogs(200);
+function LogsTab({ scopedLocationIds }: { scopedLocationIds?: string[] | null }) {
+  const logs = useMessageLogs(200, scopedLocationIds);
 
   return (
     <div className="space-y-4">
       <h2 className="font-heading font-bold text-lg">Delivery Logs</h2>
       {logs.isLoading && <p className="text-muted-foreground text-center py-8">Loading...</p>}
+
       {logs.data?.length === 0 && !logs.isLoading && (
         <div className="stat-card py-12 text-center text-muted-foreground">
           <ScrollText className="h-10 w-10 mx-auto mb-3 opacity-40" />
@@ -337,15 +531,27 @@ function LogsTab() {
               {logs.data.map((l) => (
                 <tr key={l.id} className="border-b last:border-0 hover:bg-muted/50">
                   <td className="py-2 font-medium">{l.members?.full_name || "—"}</td>
-                  <td className="py-2 text-muted-foreground hidden sm:table-cell">{l.message_templates?.title || "—"}</td>
-                  <td className="py-2 text-muted-foreground hidden md:table-cell">{l.phone || "—"}</td>
+                  <td className="py-2 text-muted-foreground hidden sm:table-cell">
+                    {l.message_templates?.title || "—"}
+                  </td>
+                  <td className="py-2 text-muted-foreground hidden md:table-cell">
+                    {l.phone || "—"}
+                  </td>
                   <td className="py-2">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusColors[l.status] || ""}`}>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                        statusColors[l.status] || ""
+                      }`}
+                    >
                       {l.status}
                     </span>
                   </td>
                   <td className="py-2 text-muted-foreground text-xs hidden lg:table-cell">
-                    {l.sent_at ? new Date(l.sent_at).toLocaleString() : l.created_at ? new Date(l.created_at).toLocaleString() : "—"}
+                    {l.sent_at
+                      ? new Date(l.sent_at).toLocaleString()
+                      : l.created_at
+                      ? new Date(l.created_at).toLocaleString()
+                      : "—"}
                   </td>
                 </tr>
               ))}
@@ -357,25 +563,36 @@ function LogsTab() {
   );
 }
 
-function SettingsTab() {
+function SettingsTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const settings = useMessagingSettings();
   const upsert = useUpsertMessagingSettings();
   const { toast } = useToast();
+
   const [providerName, setProviderName] = useState("");
   const [senderName, setSenderName] = useState("");
   const [timezone, setTimezone] = useState("Africa/Lagos");
   const [enabled, setEnabled] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
-  if (settings.data && !initialized) {
-    setProviderName(settings.data.provider_name || "twilio");
-    setSenderName(settings.data.sender_name || "DLBC");
-    setTimezone(settings.data.default_timezone || "Africa/Lagos");
-    setEnabled(settings.data.enabled);
-    setInitialized(true);
-  }
+  useEffect(() => {
+    if (settings.data && !initialized) {
+      setProviderName(settings.data.provider_name || "twilio");
+      setSenderName(settings.data.sender_name || "DLBC");
+      setTimezone(settings.data.default_timezone || "Africa/Lagos");
+      setEnabled(settings.data.enabled);
+      setInitialized(true);
+    }
+  }, [settings.data, initialized]);
 
   const handleSave = async () => {
+    if (!isSuperAdmin) {
+      toast({
+        title: "Only super admin can change messaging settings",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       await upsert.mutateAsync({
         id: settings.data?.id,
@@ -396,15 +613,24 @@ function SettingsTab() {
         <Settings className="h-5 w-5 text-muted-foreground" />
         <h2 className="font-heading font-bold text-lg">Messaging Configuration</h2>
       </div>
+
       <p className="text-sm text-muted-foreground">
         Configure SMS provider settings. API keys are stored securely as backend secrets.
       </p>
 
+      {!isSuperAdmin && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          You can view messaging settings, but only the super admin can change them.
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label>SMS Provider</Label>
-          <Select value={providerName} onValueChange={setProviderName}>
-            <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+          <Select value={providerName} onValueChange={setProviderName} disabled={!isSuperAdmin}>
+            <SelectTrigger className="h-11">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="twilio">Twilio</SelectItem>
               <SelectItem value="termii">Termii</SelectItem>
@@ -412,19 +638,36 @@ function SettingsTab() {
             </SelectContent>
           </Select>
         </div>
+
         <div className="space-y-2">
           <Label>Sender Name / ID</Label>
-          <Input value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="DLBC" className="h-11" />
+          <Input
+            value={senderName}
+            onChange={(e) => setSenderName(e.target.value)}
+            placeholder="DLBC"
+            className="h-11"
+            disabled={!isSuperAdmin}
+          />
         </div>
+
         <div className="space-y-2">
           <Label>Default Timezone</Label>
-          <Input value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="Africa/Lagos" className="h-11" />
+          <Input
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            placeholder="Africa/Lagos"
+            className="h-11"
+            disabled={!isSuperAdmin}
+          />
         </div>
+
         <div className="space-y-2">
           <Label>Messaging Enabled</Label>
           <div className="flex items-center gap-3 h-11">
-            <Switch checked={enabled} onCheckedChange={setEnabled} />
-            <span className="text-sm text-muted-foreground">{enabled ? "Active — messages will be sent" : "Disabled — no messages will be sent"}</span>
+            <Switch checked={enabled} onCheckedChange={setEnabled} disabled={!isSuperAdmin} />
+            <span className="text-sm text-muted-foreground">
+              {enabled ? "Active — messages will be sent" : "Disabled — no messages will be sent"}
+            </span>
           </div>
         </div>
       </div>
@@ -432,18 +675,18 @@ function SettingsTab() {
       <div className="bg-muted/50 rounded-lg p-4">
         <p className="text-sm font-medium mb-1">API Key Configuration</p>
         <p className="text-xs text-muted-foreground">
-          SMS provider API keys are managed as secure backend secrets. Contact your system administrator to configure or update the SMS provider credentials.
+          SMS provider API keys are managed as secure backend secrets.
         </p>
       </div>
 
-      <Button onClick={handleSave} disabled={upsert.isPending}>
+      <Button onClick={handleSave} disabled={upsert.isPending || !isSuperAdmin}>
         {upsert.isPending ? "Saving..." : "Save Settings"}
       </Button>
     </div>
   );
 }
 
-function ManualSendTab() {
+function ManualSendTab({ scopedLocationIds }: { scopedLocationIds?: string[] | null }) {
   const templates = useMessageTemplates();
   const sendTest = useSendTestMessage();
   const { toast } = useToast();
@@ -452,19 +695,39 @@ function ManualSendTab() {
 
   const handleSend = async () => {
     if (!templateId || !phone.trim()) {
-      toast({ title: "Select a template and enter a phone number", variant: "destructive" });
+      toast({
+        title: "Select a template and enter a phone number",
+        variant: "destructive",
+      });
       return;
     }
+
     try {
-      await sendTest.mutateAsync({ template_id: templateId, phone: phone.trim() });
-      toast({ title: "Test message sent", description: `Sent to ${phone.trim()}` });
+      await sendTest.mutateAsync({
+        template_id: templateId,
+        phone: phone.trim(),
+        location_id:
+          scopedLocationIds && scopedLocationIds.length === 1
+            ? scopedLocationIds[0]
+            : undefined,
+      });
+
+      toast({
+        title: "Test message sent",
+        description: `Sent to ${phone.trim()}`,
+      });
+
       setPhone("");
     } catch (err: any) {
-      toast({ title: "Send failed", description: err.message, variant: "destructive" });
+      toast({
+        title: "Send failed",
+        description: err.message,
+        variant: "destructive",
+      });
     }
   };
 
-  const selectedTemplate = templates.data?.find(t => t.id === templateId);
+  const selectedTemplate = templates.data?.find((t) => t.id === templateId);
 
   return (
     <div className="stat-card space-y-6 max-w-lg">
@@ -472,6 +735,7 @@ function ManualSendTab() {
         <Send className="h-5 w-5 text-muted-foreground" />
         <h2 className="font-heading font-bold text-lg">Manual / Test Send</h2>
       </div>
+
       <p className="text-sm text-muted-foreground">
         Send a test message to verify your SMS configuration is working.
       </p>
@@ -480,10 +744,14 @@ function ManualSendTab() {
         <div className="space-y-2">
           <Label>Template *</Label>
           <Select value={templateId} onValueChange={setTemplateId}>
-            <SelectTrigger className="h-11"><SelectValue placeholder="Select template" /></SelectTrigger>
+            <SelectTrigger className="h-11">
+              <SelectValue placeholder="Select template" />
+            </SelectTrigger>
             <SelectContent>
               {templates.data?.map((t) => (
-                <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>
+                <SelectItem key={t.id} value={t.id}>
+                  {t.title}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -498,12 +766,28 @@ function ManualSendTab() {
 
         <div className="space-y-2">
           <Label>Phone Number *</Label>
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+234..." className="h-11" />
-          <p className="text-xs text-muted-foreground">Use international format (e.g. +234XXXXXXXXXX)</p>
+          <Input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+234..."
+            className="h-11"
+          />
+          <p className="text-xs text-muted-foreground">
+            Use international format (e.g. +234XXXXXXXXXX)
+          </p>
         </div>
 
-        <Button onClick={handleSend} disabled={sendTest.isPending || !templateId || !phone.trim()}>
-          {sendTest.isPending ? "Sending..." : <><Send className="mr-2 h-4 w-4" /> Send Test Message</>}
+        <Button
+          onClick={handleSend}
+          disabled={sendTest.isPending || !templateId || !phone.trim()}
+        >
+          {sendTest.isPending ? (
+            "Sending..."
+          ) : (
+            <>
+              <Send className="mr-2 h-4 w-4" /> Send Test Message
+            </>
+          )}
         </Button>
       </div>
     </div>

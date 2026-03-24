@@ -10,6 +10,8 @@ import { useUserRole, roleLabels } from "@/hooks/use-user-role";
 import { ForcePasswordChange } from "@/components/auth/ForcePasswordChange";
 import { Badge } from "@/components/ui/badge";
 import { useQueryClient } from "@tanstack/react-query";
+import InstallAppButton from "@/components/pwa/InstallAppButton";
+import InstallAppBanner from "@/components/pwa/InstallAppBanner";
 
 export function AdminLayout() {
   const { signOut, user } = useAuth();
@@ -19,12 +21,11 @@ export function AdminLayout() {
 
   const handleSignOut = async () => {
     console.log("[RBAC] User initiated sign out — clearing all caches");
-    queryClient.clear(); // Clear all react-query caches
+    queryClient.clear();
     await signOut();
     navigate("/login");
   };
 
-  // Still loading role
   if (roleLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -33,7 +34,6 @@ export function AdminLayout() {
     );
   }
 
-  // No role assigned — unauthorized
   if (!userRole) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -49,7 +49,6 @@ export function AdminLayout() {
     );
   }
 
-  // Multiple roles detected
   if ((userRole as any)?._multipleRoles) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -65,7 +64,6 @@ export function AdminLayout() {
     );
   }
 
-  // Account disabled
   if (!userRole.is_active) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -81,7 +79,6 @@ export function AdminLayout() {
     );
   }
 
-  // Must change password
   if (userRole.must_change_password) {
     return <ForcePasswordChange />;
   }
@@ -93,31 +90,41 @@ export function AdminLayout() {
       <div className="min-h-screen flex w-full">
         <AdminSidebar userRole={userRole.role} />
         <div className="flex-1 flex flex-col min-w-0">
+          <InstallAppBanner />
+
           <header className="h-14 flex items-center justify-between border-b bg-card px-4 shrink-0">
             <div className="flex items-center gap-2">
               <SidebarTrigger />
               <Logo size="sm" className="hidden sm:flex" />
             </div>
+
             <div className="flex items-center gap-2">
+              <InstallAppButton />
+
               <Badge variant="outline" className="hidden sm:inline-flex text-xs">
                 {roleLabels[userRole.role] || userRole.role}
               </Badge>
+
               {user && (
                 <span className="text-xs text-muted-foreground hidden sm:inline mr-2 truncate max-w-[200px]">
                   {user.email}
                 </span>
               )}
+
               <Button variant="ghost" size="icon">
                 <Bell className="h-4 w-4" />
               </Button>
+
               <Button variant="ghost" size="icon" onClick={handleSignOut} title="Sign out">
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
           </header>
+
           <main className="flex-1 overflow-auto">
             <Outlet />
           </main>
+
           <PoweredByFooter className="border-t shrink-0" />
         </div>
       </div>

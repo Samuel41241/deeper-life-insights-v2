@@ -3,7 +3,6 @@ import {
   BarChart3, BellRing, Settings, Network, ShieldCheck, UserCheck, MessageSquare,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
 import { Logo } from "@/components/brand/Logo";
 import { roleNavAccess } from "@/hooks/use-user-role";
 import {
@@ -65,7 +64,6 @@ interface AdminSidebarProps {
 export function AdminSidebar({ userRole }: AdminSidebarProps) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-  const location = useLocation();
   const allowedKeys = roleNavAccess[userRole] || [];
 
   const filteredSections = navSections
@@ -80,10 +78,16 @@ export function AdminSidebar({ userRole }: AdminSidebarProps) {
       <SidebarHeader className="p-4">
         <Logo size={collapsed ? "sm" : "md"} showText={!collapsed} className="text-sidebar-foreground" />
       </SidebarHeader>
+
       <SidebarContent>
         {filteredSections.map((section) => (
           <SidebarGroup key={section.label}>
-            {!collapsed && <SidebarGroupLabel className="text-sidebar-foreground/50 uppercase text-[10px] tracking-wider">{section.label}</SidebarGroupLabel>}
+            {!collapsed && (
+              <SidebarGroupLabel className="text-sidebar-foreground/50 uppercase text-[10px] tracking-wider">
+                {section.label}
+              </SidebarGroupLabel>
+            )}
+
             <SidebarGroupContent>
               <SidebarMenu>
                 {section.items.map((item) => (
@@ -106,6 +110,7 @@ export function AdminSidebar({ userRole }: AdminSidebarProps) {
           </SidebarGroup>
         ))}
       </SidebarContent>
+
       <SidebarFooter className="p-3">
         {!collapsed && (
           <p className="text-[10px] text-sidebar-foreground/40 text-center">

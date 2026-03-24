@@ -1,11 +1,17 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { History, Search, CalendarIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAttendanceHistory } from "@/hooks/use-attendance";
 import { useServices } from "@/hooks/use-services";
 import { useAllLocations } from "@/hooks/use-hierarchy";
-import { Badge } from "@/components/ui/badge";
+import { useScopedLocationIds, useUserRole } from "@/hooks/use-user-role";
 
 const statusColors: Record<string, string> = {
   present: "bg-primary/10 text-primary border-primary/20",
@@ -20,16 +26,66 @@ export default function AttendanceHistory() {
   const [locationId, setLocationId] = useState("");
   const [search, setSearch] = useState("");
 
+  const { data: userRole, isLoading: roleLoading } = useUserRole();
+  const { data: scopedLocations, isLoading: scopeLoading } = useScopedLocationIds();
+
+  const hasRoleError =
+    !!(userRole as any)?._multipleRoles || !!(userRole as any)?._scopeError;
+
+  const effectiveScopedLocations =
+    userRole?.role === "super_admin" ? null : scopedLocations ?? [];
+
   const services = useServices();
   const locations = useAllLocations();
+
   const attendance = useAttendanceHistory({
     date: date || undefined,
     serviceId: serviceId || undefined,
     locationId: locationId || undefined,
     search: search || undefined,
+    scopedLocationIds: effectiveScopedLocations,
   });
 
+  const visibleLocations = useMemo(() => {
+    if (!locations.data) return [];
+    if (effectiveScopedLocations === null) return locations.data; // super_admin
+    if (!effectiveScopedLocations || effectiveScopedLocations.length === 0) return [];
+    return locations.data.filter((loc) => effectiveScopedLocations.includes(loc.id));
+  }, [locations.data, effectiveScopedLocations]);
+
   const records = attendance.data || [];
+
+  if (roleLoading || scopeLoading) {
+    return (
+      <div className="admin-page">
+        <h1 className="admin-page-title">Attendance History</h1>
+        <p className="admin-page-description">Loading attendance history...</p>
+      </div>
+    );
+  }
+
+  if (!userRole) {
+    return (
+      <div className="admin-page">
+        <h1 className="admin-page-title">Access Error</h1>
+        <p className="admin-page-description">
+          No role is assigned to this account. Please contact the system administrator.
+        </p>
+      </div>
+    );
+  }
+
+  if (hasRoleError) {
+    return (
+      <div className="admin-page">
+        <h1 className="admin-page-title">Access Error</h1>
+        <p className="admin-page-description">
+          {(userRole as any)?._scopeError ||
+            "Invalid role configuration detected. Please contact the system administrator."}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-page">
@@ -51,28 +107,41 @@ export default function AttendanceHistory() {
             className="pl-9 h-11 w-full sm:w-[180px]"
           />
         </div>
-        <Select value={serviceId} onValueChange={(v) => setServiceId(v === "all" ? "" : v)}>
+
+        <Select
+          value={serviceId}
+          onValueChange={(v) => setServiceId(v === "all" ? "" : v)}
+        >
           <SelectTrigger className="w-full sm:w-[220px] h-11">
             <SelectValue placeholder="All Services" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Services</SelectItem>
             {services.data?.map((s) => (
-              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              <SelectItem key={s.id} value={s.id}>
+                {s.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Select value={locationId} onValueChange={(v) => setLocationId(v === "all" ? "" : v)}>
+
+        <Select
+          value={locationId}
+          onValueChange={(v) => setLocationId(v === "all" ? "" : v)}
+        >
           <SelectTrigger className="w-full sm:w-[220px] h-11">
             <SelectValue placeholder="All Locations" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Locations</SelectItem>
-            {locations.data?.map((l) => (
-              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+            {visibleLocations.map((l) => (
+              <SelectItem key={l.id} value={l.id}>
+                {l.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
+
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -104,18 +173,28 @@ export default function AttendanceHistory() {
                 <td className="py-3 text-muted-foreground">{r.services?.name || "—"}</td>
                 <td className="py-3 text-muted-foreground">{r.locations?.name || "—"}</td>
                 <td className="py-3 text-muted-foreground">
-                  {new Date(r.check_in_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  {new Date(r.check_in_time).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
                 </td>
                 <td className="py-3">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusColors[r.status] || ""}`}>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                      statusColors[r.status] || ""
+                    }`}
+                  >
                     {r.status}
                   </span>
                 </td>
-                <td className="py-3 text-muted-foreground text-xs">{r.cards?.card_number || "—"}</td>
+                <td className="py-3 text-muted-foreground text-xs">
+                  {r.cards?.card_number || "—"}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+
         {records.length === 0 && (
           <div className="py-12 text-center text-muted-foreground">
             <History className="h-10 w-10 mx-auto mb-3 opacity-40" />
@@ -132,17 +211,29 @@ export default function AttendanceHistory() {
             <p>No attendance records found</p>
           </div>
         )}
+
         {records.map((r: any) => (
           <div key={r.id} className="stat-card">
             <div className="flex items-center justify-between mb-2">
               <p className="font-medium">{r.members?.full_name || "—"}</p>
-              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusColors[r.status] || ""}`}>
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                  statusColors[r.status] || ""
+                }`}
+              >
                 {r.status}
               </span>
             </div>
             <div className="text-xs text-muted-foreground space-y-0.5">
-              <p>{r.services?.name || "—"} · {r.locations?.name || "—"}</p>
-              <p>{new Date(r.check_in_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+              <p>
+                {r.services?.name || "—"} · {r.locations?.name || "—"}
+              </p>
+              <p>
+                {new Date(r.check_in_time).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </p>
             </div>
           </div>
         ))}

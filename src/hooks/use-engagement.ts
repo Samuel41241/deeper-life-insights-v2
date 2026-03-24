@@ -64,10 +64,9 @@ export function useEngagementData(scopedLocationIds?: string[] | null) {
       windowStart.setDate(windowStart.getDate() - config.windowWeeks * 7);
       const windowStartStr = windowStart.toISOString().split("T")[0];
 
-      // Fetch all active members (with scope filter)
       let membersQuery = supabase
         .from("members")
-        .select("id, full_name, category, status, location_id, locations(name)")
+        .select("id, full_name, category, status, location_id, date_joined, locations(name)")
         .eq("status", "active")
         .order("full_name");
 
@@ -80,28 +79,35 @@ export function useEngagementData(scopedLocationIds?: string[] | null) {
       const { data: members, error: mErr } = await membersQuery;
       if (mErr) throw mErr;
 
-      // Fetch services count in window
       const { data: services } = await supabase
         .from("services")
         .select("id, day_of_week");
 
-      const totalServicesInWindow = services?.length
-        ? countServiceOccurrences(services, windowStartStr, new Date().toISOString().split("T")[0])
-        : config.windowWeeks;
-
-      // Fetch all attendance in window
-      const { data: attendance, error: aErr } = await supabase
+      let attendanceQuery = supabase
         .from("attendance")
-        .select("member_id, date, service_id")
+        .select("member_id, date, service_id, location_id")
         .gte("date", windowStartStr)
         .order("date", { ascending: false });
+
+      if (scopedLocationIds && scopedLocationIds.length > 0) {
+        attendanceQuery = attendanceQuery.in("location_id", scopedLocationIds);
+      }
+
+      const { data: attendance, error: aErr } = await attendanceQuery;
       if (aErr) throw aErr;
 
-      const { data: allAttendance } = await supabase
+      let allAttendanceQuery = supabase
         .from("attendance")
-        .select("member_id, date")
+        .select("member_id, date, location_id")
         .order("date", { ascending: false })
-        .limit(1000);
+        .limit(5000);
+
+      if (scopedLocationIds && scopedLocationIds.length > 0) {
+        allAttendanceQuery = allAttendanceQuery.in("location_id", scopedLocationIds);
+      }
+
+      const { data: allAttendance, error: allAttendanceErr } = await allAttendanceQuery;
+      if (allAttendanceErr) throw allAttendanceErr;
 
       const attendanceByMember = new Map<string, string[]>();
       attendance?.forEach((a) => {
@@ -117,18 +123,36 @@ export function useEngagementData(scopedLocationIds?: string[] | null) {
         }
       });
 
-      const recentServiceDates = getRecentServiceDates(services || [], 8);
+      const recentServiceDates = getRecentServiceDates(
+        services || [],
+        8
+      );
 
-      const results: MemberEngagement[] = (members || []).map((m) => {
+      const results: MemberEngagement[] = (members || []).map((m: any) => {
         const memberDates = attendanceByMember.get(m.id) || [];
         const uniqueDates = new Set(memberDates);
+
+        const joinedAt = m.date_joined
+          ? new Date(m.date_joined).toISOString().split("T")[0]
+          : windowStartStr;
+
+        const effectiveServiceCount = services?.length
+          ? countServiceOccurrences(
+              services,
+              joinedAt > windowStartStr ? joinedAt : windowStartStr,
+              new Date().toISOString().split("T")[0]
+            )
+          : config.windowWeeks;
+
         const attended = uniqueDates.size;
-        const missed = Math.max(0, totalServicesInWindow - attended);
-        const rate = totalServicesInWindow > 0 ? (attended / totalServicesInWindow) * 100 : 100;
+        const missed = Math.max(0, effectiveServiceCount - attended);
+        const rate =
+          effectiveServiceCount > 0 ? (attended / effectiveServiceCount) * 100 : 100;
         const lastAttended = lastAttendedMap.get(m.id) || null;
 
         let consecutive = 0;
         for (const sd of recentServiceDates) {
+          if (sd < joinedAt) continue;
           if (!uniqueDates.has(sd)) {
             consecutive++;
           } else {
@@ -139,8 +163,10 @@ export function useEngagementData(scopedLocationIds?: string[] | null) {
         const midpoint = new Date();
         midpoint.setDate(midpoint.getDate() - Math.floor((config.windowWeeks * 7) / 2));
         const midStr = midpoint.toISOString().split("T")[0];
+
         const firstHalf = memberDates.filter((d) => d < midStr).length;
         const secondHalf = memberDates.filter((d) => d >= midStr).length;
+
         let trend: "improving" | "stable" | "declining" = "stable";
         if (secondHalf > firstHalf + 1) trend = "improving";
         else if (firstHalf > secondHalf + 1) trend = "declining";
@@ -154,7 +180,7 @@ export function useEngagementData(scopedLocationIds?: string[] | null) {
           location_name: loc?.name || "",
           location_id: m.location_id,
           status: m.status,
-          total_services_in_window: totalServicesInWindow,
+          total_services_in_window: effectiveServiceCount,
           attended_count: attended,
           missed_count: missed,
           attendance_rate: Math.round(rate * 10) / 10,
@@ -171,23 +197,31 @@ export function useEngagementData(scopedLocationIds?: string[] | null) {
   });
 }
 
-export function useMemberEngagement(memberId: string) {
-  const all = useEngagementData();
+export function useMemberEngagement(memberId: string, scopedLocationIds?: string[] | null) {
+  const all = useEngagementData(scopedLocationIds);
   const member = all.data?.find((m) => m.member_id === memberId);
   return { ...all, data: member };
 }
 
-export function useMemberAttendanceHistory(memberId: string) {
+export function useMemberAttendanceHistory(memberId: string, scopedLocationIds?: string[] | null) {
   return useQuery({
-    queryKey: ["member-attendance-history", memberId],
+    queryKey: ["member-attendance-history", memberId, scopedLocationIds],
     enabled: !!memberId,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("attendance")
         .select("*, services(name)")
         .eq("member_id", memberId)
         .order("date", { ascending: false })
         .limit(50);
+
+      if (scopedLocationIds && scopedLocationIds.length > 0) {
+        q = q.in("location_id", scopedLocationIds);
+      } else if (scopedLocationIds && scopedLocationIds.length === 0) {
+        return [];
+      }
+
+      const { data, error } = await q;
       if (error) throw error;
       return data;
     },
@@ -200,20 +234,28 @@ function countServiceOccurrences(
   endStr: string
 ): number {
   const dayMap: Record<string, number> = {
-    sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
-    thursday: 4, friday: 5, saturday: 6,
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
   };
+
   const start = new Date(startStr);
   const end = new Date(endStr);
   const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+
   let total = 0;
   for (const s of services) {
     const dow = dayMap[s.day_of_week] ?? -1;
     if (dow < 0) continue;
     const firstDay = start.getDay();
-    let daysUntilFirst = (dow - firstDay + 7) % 7;
+    const daysUntilFirst = (dow - firstDay + 7) % 7;
     total += Math.max(0, Math.floor((days - daysUntilFirst) / 7) + 1);
   }
+
   return Math.max(total, 1);
 }
 
@@ -222,18 +264,27 @@ function getRecentServiceDates(
   count: number
 ): string[] {
   const dayMap: Record<string, number> = {
-    sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
-    thursday: 4, friday: 5, saturday: 6,
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
   };
+
   const dates: string[] = [];
   const today = new Date();
+
   for (let i = 0; i < 60 && dates.length < count; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     const dow = d.getDay();
+
     if (services.some((s) => dayMap[s.day_of_week] === dow)) {
       dates.push(d.toISOString().split("T")[0]);
     }
   }
+
   return dates;
 }

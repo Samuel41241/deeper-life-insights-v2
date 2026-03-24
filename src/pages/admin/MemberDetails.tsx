@@ -1,43 +1,100 @@
 import { useParams, Link } from "react-router-dom";
 import { useMember, useMemberCards, useCreateCard } from "@/hooks/use-members";
 import { useMemberEngagement, useMemberAttendanceHistory } from "@/hooks/use-engagement";
-import { User, QrCode, Calendar, MapPin, Phone, ArrowLeft, AlertTriangle, TrendingUp, TrendingDown, BellRing, ClipboardCheck, Activity } from "lucide-react";
+import {
+  QrCode,
+  Calendar,
+  MapPin,
+  Phone,
+  ArrowLeft,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { RiskLevel } from "@/hooks/use-engagement";
+import { useScopedLocationIds, useUserRole } from "@/hooks/use-user-role";
 
 const categoryLabels: Record<string, string> = {
-  adult_male: "Adult Male", adult_female: "Adult Female",
-  youth_boy: "Youth Boy", youth_girl: "Youth Girl",
-  children_boy: "Children Boy", children_girl: "Children Girl",
+  adult_male: "Adult Male",
+  adult_female: "Adult Female",
+  youth_boy: "Youth Boy",
+  youth_girl: "Youth Girl",
+  children_boy: "Children Boy",
+  children_girl: "Children Girl",
 };
 
 const riskStyles: Record<RiskLevel, { label: string; class: string }> = {
-  no_concern: { label: "No Concern", class: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400" },
-  watchlist: { label: "Watchlist", class: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400" },
-  follow_up: { label: "Follow-Up Required", class: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400" },
-  pastoral_attention: { label: "Pastoral Attention", class: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400" },
+  no_concern: {
+    label: "No Concern",
+    class: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
+  },
+  watchlist: {
+    label: "Watchlist",
+    class: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+  },
+  follow_up: {
+    label: "Follow-Up Required",
+    class: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+  },
+  pastoral_attention: {
+    label: "Pastoral Attention",
+    class: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+  },
 };
 
 export default function MemberDetails() {
   const { id } = useParams<{ id: string }>();
+
+  const { data: userRole, isLoading: roleLoading } = useUserRole();
+  const { data: scopedLocations, isLoading: scopeLoading } = useScopedLocationIds();
+
   const member = useMember(id!);
   const cards = useMemberCards(id!);
   const createCard = useCreateCard();
-  const engagement = useMemberEngagement(id!);
-  const attendanceHistory = useMemberAttendanceHistory(id!);
+  const engagement = useMemberEngagement(id!, scopedLocations ?? null);
+  const attendanceHistory = useMemberAttendanceHistory(id!, scopedLocations ?? null);
+
   const { toast } = useToast();
   const [generating, setGenerating] = useState(false);
 
+  const hasRoleError =
+    !!(userRole as any)?._multipleRoles || !!(userRole as any)?._scopeError;
+
+  const effectiveScopedLocations =
+    userRole?.role === "super_admin" ? null : scopedLocations ?? [];
+
+  const m = member.data;
+  const loc = m?.locations as any;
+  const eng = engagement.data;
+
+  const memberInScope = useMemo(() => {
+    if (!m) return false;
+    if (effectiveScopedLocations === null) return true;
+    if (!effectiveScopedLocations || effectiveScopedLocations.length === 0) return false;
+    return effectiveScopedLocations.includes(m.location_id);
+  }, [m, effectiveScopedLocations]);
+
   const handleGenerateCard = async () => {
-    if (!id) return;
+    if (!id || !m) return;
+
+    if (!memberInScope) {
+      toast({ title: "This member is outside your scope", variant: "destructive" });
+      return;
+    }
+
     setGenerating(true);
     try {
       const cardNumber = `DLBC-${Date.now().toString(36).toUpperCase()}`;
       const qrValue = crypto.randomUUID();
-      await createCard.mutateAsync({ member_id: id, card_number: cardNumber, qr_code_value: qrValue });
+      await createCard.mutateAsync({
+        member_id: id,
+        card_number: cardNumber,
+        qr_code_value: qrValue,
+      });
       toast({ title: "Card generated successfully" });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -46,11 +103,7 @@ export default function MemberDetails() {
     }
   };
 
-  const m = member.data;
-  const loc = m?.locations as any;
-  const eng = engagement.data;
-
-  if (member.isLoading) {
+  if (roleLoading || scopeLoading || member.isLoading) {
     return (
       <div className="admin-page">
         <div className="animate-pulse space-y-4">
@@ -62,11 +115,47 @@ export default function MemberDetails() {
     );
   }
 
+  if (!userRole) {
+    return (
+      <div className="admin-page">
+        <p className="text-muted-foreground">No role assigned to this account</p>
+      </div>
+    );
+  }
+
+  if (hasRoleError) {
+    return (
+      <div className="admin-page">
+        <p className="text-muted-foreground">
+          {(userRole as any)?._scopeError ||
+            "Invalid role configuration detected. Please contact the system administrator."}
+        </p>
+      </div>
+    );
+  }
+
   if (!m) {
     return (
       <div className="admin-page">
         <p className="text-muted-foreground">Member not found</p>
-        <Link to="/admin/members"><Button variant="outline" className="mt-4"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Members</Button></Link>
+        <Link to="/admin/members">
+          <Button variant="outline" className="mt-4">
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Members
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
+  if (!memberInScope) {
+    return (
+      <div className="admin-page">
+        <p className="text-muted-foreground">This member is outside your assigned scope.</p>
+        <Link to="/admin/members">
+          <Button variant="outline" className="mt-4">
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Members
+          </Button>
+        </Link>
       </div>
     );
   }
@@ -77,41 +166,75 @@ export default function MemberDetails() {
     loc?.districts?.group_districts?.name,
     loc?.districts?.name,
     loc?.name,
-  ].filter(Boolean).join(" → ");
+  ]
+    .filter(Boolean)
+    .join(" → ");
 
   const activeCard = cards.data?.find((c) => c.status === "active");
 
   return (
     <div className="admin-page">
-      <Link to="/admin/members" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-2">
+      <Link
+        to="/admin/members"
+        className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-2"
+      >
         <ArrowLeft className="mr-1 h-4 w-4" /> Back to Members
       </Link>
 
-      {/* Profile Header */}
       <div className="stat-card flex flex-col sm:flex-row items-start gap-6">
         <div className="h-16 w-16 rounded-full brand-gradient flex items-center justify-center shrink-0">
           <span className="text-primary-foreground text-xl font-bold">
-            {m.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+            {m.full_name
+              .split(" ")
+              .map((n) => n[0])
+              .join("")
+              .slice(0, 2)
+              .toUpperCase()}
           </span>
         </div>
+
         <div className="flex-1 min-w-0">
           <h2 className="text-xl font-heading font-bold">{m.full_name}</h2>
           <div className="flex flex-wrap gap-2 mt-2">
             <Badge variant="secondary">{categoryLabels[m.category] || m.category}</Badge>
             <Badge variant={m.status === "active" ? "default" : "secondary"}>{m.status}</Badge>
-            {eng && <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${riskStyles[eng.risk_level].class}`}>{riskStyles[eng.risk_level].label}</span>}
+            {eng && (
+              <span
+                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${riskStyles[eng.risk_level].class}`}
+              >
+                {riskStyles[eng.risk_level].label}
+              </span>
+            )}
           </div>
+
           <div className="grid gap-2 mt-4 text-sm text-muted-foreground sm:grid-cols-2">
-            {m.phone && <div className="flex items-center gap-2"><Phone className="h-4 w-4" />{m.phone}</div>}
-            {m.address && <div className="flex items-center gap-2"><MapPin className="h-4 w-4" />{m.address}</div>}
-            <div className="flex items-center gap-2"><Calendar className="h-4 w-4" />Joined: {m.date_joined}</div>
-            {locationPath && <div className="flex items-center gap-2 sm:col-span-2"><MapPin className="h-4 w-4" />{locationPath}</div>}
+            {m.phone && (
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4" />
+                {m.phone}
+              </div>
+            )}
+            {m.address && (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                {m.address}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              Joined: {m.date_joined}
+            </div>
+            {locationPath && (
+              <div className="flex items-center gap-2 sm:col-span-2">
+                <MapPin className="h-4 w-4" />
+                {locationPath}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Engagement Summary */}
         <div className="stat-card">
           <h3 className="font-heading font-bold flex items-center gap-2 mb-4">
             <Activity className="h-5 w-5" /> Engagement Summary
@@ -125,26 +248,38 @@ export default function MemberDetails() {
                 </div>
                 <div className="p-3 bg-muted rounded-lg">
                   <p className="text-xs text-muted-foreground">Services Attended</p>
-                  <p className="text-lg font-bold">{eng.attended_count}/{eng.total_services_in_window}</p>
+                  <p className="text-lg font-bold">
+                    {eng.attended_count}/{eng.total_services_in_window}
+                  </p>
                 </div>
                 <div className="p-3 bg-muted rounded-lg">
                   <p className="text-xs text-muted-foreground">Consecutive Absences</p>
-                  <p className={`text-lg font-bold ${eng.consecutive_absences >= 2 ? "text-destructive" : ""}`}>{eng.consecutive_absences}</p>
+                  <p className={`text-lg font-bold ${eng.consecutive_absences >= 2 ? "text-destructive" : ""}`}>
+                    {eng.consecutive_absences}
+                  </p>
                 </div>
                 <div className="p-3 bg-muted rounded-lg">
                   <p className="text-xs text-muted-foreground">Trend</p>
                   <p className="text-lg font-bold flex items-center gap-1">
-                    {eng.trend === "declining" && <TrendingDown className="h-4 w-4 text-destructive" />}
-                    {eng.trend === "improving" && <TrendingUp className="h-4 w-4 text-emerald-600" />}
+                    {eng.trend === "declining" && (
+                      <TrendingDown className="h-4 w-4 text-destructive" />
+                    )}
+                    {eng.trend === "improving" && (
+                      <TrendingUp className="h-4 w-4 text-emerald-600" />
+                    )}
                     {eng.trend.charAt(0).toUpperCase() + eng.trend.slice(1)}
                   </p>
                 </div>
               </div>
-              {eng.last_attended && (
-                <p className="text-sm text-muted-foreground">Last attended: <span className="font-medium text-foreground">{eng.last_attended}</span></p>
-              )}
-              {!eng.last_attended && (
-                <p className="text-sm text-destructive font-medium">No attendance recorded in tracking window</p>
+              {eng.last_attended ? (
+                <p className="text-sm text-muted-foreground">
+                  Last attended:{" "}
+                  <span className="font-medium text-foreground">{eng.last_attended}</span>
+                </p>
+              ) : (
+                <p className="text-sm text-destructive font-medium">
+                  No attendance recorded in tracking window
+                </p>
               )}
             </div>
           ) : (
@@ -154,38 +289,53 @@ export default function MemberDetails() {
           )}
         </div>
 
-        {/* Card Status */}
         <div className="stat-card">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-heading font-bold flex items-center gap-2"><QrCode className="h-5 w-5" /> QR Card</h3>
+            <h3 className="font-heading font-bold flex items-center gap-2">
+              <QrCode className="h-5 w-5" /> QR Card
+            </h3>
             <Button size="sm" onClick={handleGenerateCard} disabled={generating}>
               {generating ? "Generating..." : activeCard ? "Replace Card" : "Generate Card"}
             </Button>
           </div>
+
           {activeCard ? (
             <div className="p-4 bg-muted rounded-lg">
               <p className="font-mono text-sm">Card #: {activeCard.card_number}</p>
-              <p className="text-xs text-muted-foreground mt-1">QR: {activeCard.qr_code_value.slice(0, 16)}...</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                QR: {activeCard.qr_code_value.slice(0, 16)}...
+              </p>
               <p className="text-xs text-muted-foreground mt-1">Issued: {activeCard.issued_date}</p>
               <Badge className="mt-2">{activeCard.status}</Badge>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No active card. Generate one to enable QR attendance.</p>
+            <p className="text-sm text-muted-foreground">
+              No active card. Generate one to enable QR attendance.
+            </p>
           )}
+
           {cards.data && cards.data.length > 1 && (
             <div className="mt-3">
-              <p className="text-xs text-muted-foreground mb-2">Card History ({cards.data.length} total)</p>
-              {cards.data.filter(c => c.id !== activeCard?.id).map((c) => (
-                <div key={c.id} className="text-xs text-muted-foreground flex justify-between py-1 border-t">
-                  <span>{c.card_number}</span>
-                  <Badge variant="secondary" className="text-[10px]">{c.status}</Badge>
-                </div>
-              ))}
+              <p className="text-xs text-muted-foreground mb-2">
+                Card History ({cards.data.length} total)
+              </p>
+              {cards.data
+                .filter((c) => c.id !== activeCard?.id)
+                .map((c) => (
+                  <div
+                    key={c.id}
+                    className="text-xs text-muted-foreground flex justify-between py-1 border-t"
+                  >
+                    <span>{c.card_number}</span>
+                    <Badge variant="secondary" className="text-[10px]">
+                      {c.status}
+                    </Badge>
+                  </div>
+                ))}
             </div>
           )}
         </div>
 
-        {/* Attendance History */}
         <div className="stat-card lg:col-span-2">
           <h3 className="font-heading font-bold flex items-center gap-2 mb-4">
             <Calendar className="h-5 w-5" /> Recent Attendance
@@ -206,9 +356,23 @@ export default function MemberDetails() {
                     <tr key={a.id} className="border-b last:border-0">
                       <td className="py-2">{a.date}</td>
                       <td className="py-2">{a.services?.name || "—"}</td>
-                      <td className="py-2">{new Date(a.check_in_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td>
                       <td className="py-2">
-                        <Badge variant={a.status === "present" ? "default" : a.status === "late" ? "secondary" : "destructive"} className="text-[10px]">
+                        {new Date(a.check_in_time).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </td>
+                      <td className="py-2">
+                        <Badge
+                          variant={
+                            a.status === "present"
+                              ? "default"
+                              : a.status === "late"
+                              ? "secondary"
+                              : "destructive"
+                          }
+                          className="text-[10px]"
+                        >
                           {a.status}
                         </Badge>
                       </td>
