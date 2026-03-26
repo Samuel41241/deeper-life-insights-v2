@@ -49,7 +49,7 @@ export default function RegisterMember() {
 
   const createMember = useCreateMember();
   const { data: userRole, isLoading: roleLoading } = useUserRole();
-  const { data: scopedLocations, isLoading: scopeLoading } = useScopedLocationIds();
+  const { data: scopedLocationIds, isLoading: scopeLoading } = useScopedLocationIds();
 
   const states = useStates();
   const regions = useRegions(stateId || undefined);
@@ -62,9 +62,6 @@ export default function RegisterMember() {
 
   const hasRoleError =
     !!(userRole as any)?._multipleRoles || !!(userRole as any)?._scopeError;
-
-  const effectiveScopedLocations =
-    userRole?.role === "super_admin" ? null : scopedLocations ?? [];
 
   const isSuperAdmin = userRole?.role === "super_admin";
   const isStateAdmin = userRole?.role === "state_admin";
@@ -87,14 +84,18 @@ export default function RegisterMember() {
   const visibleStates = useMemo(() => {
     if (!states.data) return [];
     if (isSuperAdmin) return states.data;
-    if (userRole?.state_id) return states.data.filter((s: any) => s.id === userRole.state_id);
+    if (userRole?.state_id) {
+      return states.data.filter((s: any) => s.id === userRole.state_id);
+    }
     return [];
   }, [states.data, isSuperAdmin, userRole]);
 
   const visibleRegions = useMemo(() => {
     if (!regions.data) return [];
     if (isSuperAdmin || isStateAdmin) return regions.data;
-    if (userRole?.region_id) return regions.data.filter((r: any) => r.id === userRole.region_id);
+    if (userRole?.region_id) {
+      return regions.data.filter((r: any) => r.id === userRole.region_id);
+    }
     return [];
   }, [regions.data, isSuperAdmin, isStateAdmin, userRole]);
 
@@ -119,21 +120,19 @@ export default function RegisterMember() {
   const visibleLocations = useMemo(() => {
     if (!locations.data) return [];
 
-    let baseLocations = locations.data;
+    let result = locations.data as any[];
 
-    if (effectiveScopedLocations !== null) {
-      if (!effectiveScopedLocations || effectiveScopedLocations.length === 0) return [];
-      baseLocations = baseLocations.filter((loc: any) =>
-        effectiveScopedLocations.includes(loc.id)
-      );
+    if (scopedLocationIds !== null && scopedLocationIds !== undefined) {
+      if (scopedLocationIds.length === 0) return [];
+      result = result.filter((loc: any) => scopedLocationIds.includes(loc.id));
     }
 
     if (isLocationAdmin && userRole?.location_id) {
-      return baseLocations.filter((l: any) => l.id === userRole.location_id);
+      result = result.filter((loc: any) => loc.id === userRole.location_id);
     }
 
-    return baseLocations;
-  }, [locations.data, effectiveScopedLocations, isLocationAdmin, userRole]);
+    return result;
+  }, [locations.data, scopedLocationIds, isLocationAdmin, userRole]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -356,7 +355,11 @@ export default function RegisterMember() {
 
             <div className="space-y-2 sm:col-span-2">
               <Label>Location *</Label>
-              <Select value={locationId} onValueChange={setLocationId} disabled={isLocationAdmin}>
+              <Select
+                value={locationId}
+                onValueChange={setLocationId}
+                disabled={isLocationAdmin}
+              >
                 <SelectTrigger className="h-11">
                   <SelectValue placeholder="Select location" />
                 </SelectTrigger>
