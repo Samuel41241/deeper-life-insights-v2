@@ -1,11 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
 import { useCreateMember } from "@/hooks/use-members";
-import { useAllLocations } from "@/hooks/use-hierarchy";
+import {
+  useStates,
+  useRegions,
+  useGroupDistricts,
+  useDistricts,
+  useLocations,
+} from "@/hooks/use-hierarchy";
 import { useScopedLocationIds, useUserRole } from "@/hooks/use-user-role";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -36,10 +42,20 @@ export default function RegisterMember() {
   const [address, setAddress] = useState("");
   const [dateJoined, setDateJoined] = useState("");
 
+  const [stateId, setStateId] = useState("");
+  const [regionId, setRegionId] = useState("");
+  const [groupDistrictId, setGroupDistrictId] = useState("");
+  const [districtId, setDistrictId] = useState("");
+
   const createMember = useCreateMember();
-  const locations = useAllLocations();
   const { data: userRole, isLoading: roleLoading } = useUserRole();
   const { data: scopedLocations, isLoading: scopeLoading } = useScopedLocationIds();
+
+  const states = useStates();
+  const regions = useRegions(stateId || undefined);
+  const groupDistricts = useGroupDistricts(regionId || undefined);
+  const districts = useDistricts(groupDistrictId || undefined);
+  const locations = useLocations(districtId || undefined);
 
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -50,12 +66,74 @@ export default function RegisterMember() {
   const effectiveScopedLocations =
     userRole?.role === "super_admin" ? null : scopedLocations ?? [];
 
+  const isSuperAdmin = userRole?.role === "super_admin";
+  const isStateAdmin = userRole?.role === "state_admin";
+  const isRegionAdmin = userRole?.role === "region_admin";
+  const isGroupAdmin = userRole?.role === "group_admin";
+  const isDistrictAdmin = userRole?.role === "district_admin";
+  const isLocationAdmin =
+    userRole?.role === "location_admin" || userRole?.role === "data_officer";
+
+  useEffect(() => {
+    if (!userRole) return;
+
+    if (userRole.state_id) setStateId(userRole.state_id);
+    if (userRole.region_id) setRegionId(userRole.region_id);
+    if (userRole.group_district_id) setGroupDistrictId(userRole.group_district_id);
+    if (userRole.district_id) setDistrictId(userRole.district_id);
+    if (userRole.location_id) setLocationId(userRole.location_id);
+  }, [userRole]);
+
+  const visibleStates = useMemo(() => {
+    if (!states.data) return [];
+    if (isSuperAdmin) return states.data;
+    if (userRole?.state_id) return states.data.filter((s: any) => s.id === userRole.state_id);
+    return [];
+  }, [states.data, isSuperAdmin, userRole]);
+
+  const visibleRegions = useMemo(() => {
+    if (!regions.data) return [];
+    if (isSuperAdmin || isStateAdmin) return regions.data;
+    if (userRole?.region_id) return regions.data.filter((r: any) => r.id === userRole.region_id);
+    return [];
+  }, [regions.data, isSuperAdmin, isStateAdmin, userRole]);
+
+  const visibleGroupDistricts = useMemo(() => {
+    if (!groupDistricts.data) return [];
+    if (isSuperAdmin || isStateAdmin || isRegionAdmin) return groupDistricts.data;
+    if (userRole?.group_district_id) {
+      return groupDistricts.data.filter((g: any) => g.id === userRole.group_district_id);
+    }
+    return [];
+  }, [groupDistricts.data, isSuperAdmin, isStateAdmin, isRegionAdmin, userRole]);
+
+  const visibleDistricts = useMemo(() => {
+    if (!districts.data) return [];
+    if (isSuperAdmin || isStateAdmin || isRegionAdmin || isGroupAdmin) return districts.data;
+    if (userRole?.district_id) {
+      return districts.data.filter((d: any) => d.id === userRole.district_id);
+    }
+    return [];
+  }, [districts.data, isSuperAdmin, isStateAdmin, isRegionAdmin, isGroupAdmin, userRole]);
+
   const visibleLocations = useMemo(() => {
     if (!locations.data) return [];
-    if (effectiveScopedLocations === null) return locations.data;
-    if (!effectiveScopedLocations || effectiveScopedLocations.length === 0) return [];
-    return locations.data.filter((loc) => effectiveScopedLocations.includes(loc.id));
-  }, [locations.data, effectiveScopedLocations]);
+
+    let baseLocations = locations.data;
+
+    if (effectiveScopedLocations !== null) {
+      if (!effectiveScopedLocations || effectiveScopedLocations.length === 0) return [];
+      baseLocations = baseLocations.filter((loc: any) =>
+        effectiveScopedLocations.includes(loc.id)
+      );
+    }
+
+    if (isLocationAdmin && userRole?.location_id) {
+      return baseLocations.filter((l: any) => l.id === userRole.location_id);
+    }
+
+    return baseLocations;
+  }, [locations.data, effectiveScopedLocations, isLocationAdmin, userRole]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,14 +248,120 @@ export default function RegisterMember() {
               </Select>
             </div>
 
+            {!isLocationAdmin && (
+              <div className="space-y-2">
+                <Label>State *</Label>
+                <Select
+                  value={stateId}
+                  onValueChange={(v) => {
+                    setStateId(v);
+                    setRegionId("");
+                    setGroupDistrictId("");
+                    setDistrictId("");
+                    setLocationId("");
+                  }}
+                  disabled={!isSuperAdmin}
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="Select state" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {visibleStates.map((s: any) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {!isLocationAdmin && !isDistrictAdmin && (
+              <div className="space-y-2">
+                <Label>Region *</Label>
+                <Select
+                  value={regionId}
+                  onValueChange={(v) => {
+                    setRegionId(v);
+                    setGroupDistrictId("");
+                    setDistrictId("");
+                    setLocationId("");
+                  }}
+                  disabled={isRegionAdmin}
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="Select region" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {visibleRegions.map((r: any) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {!isLocationAdmin && !isDistrictAdmin && !isGroupAdmin && (
+              <div className="space-y-2">
+                <Label>Group of Districts *</Label>
+                <Select
+                  value={groupDistrictId}
+                  onValueChange={(v) => {
+                    setGroupDistrictId(v);
+                    setDistrictId("");
+                    setLocationId("");
+                  }}
+                  disabled={isGroupAdmin}
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="Select group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {visibleGroupDistricts.map((g: any) => (
+                      <SelectItem key={g.id} value={g.id}>
+                        {g.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {!isLocationAdmin && (
+              <div className="space-y-2">
+                <Label>District *</Label>
+                <Select
+                  value={districtId}
+                  onValueChange={(v) => {
+                    setDistrictId(v);
+                    setLocationId("");
+                  }}
+                  disabled={isDistrictAdmin}
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="Select district" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {visibleDistricts.map((d: any) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="space-y-2 sm:col-span-2">
               <Label>Location *</Label>
-              <Select value={locationId} onValueChange={setLocationId}>
+              <Select value={locationId} onValueChange={setLocationId} disabled={isLocationAdmin}>
                 <SelectTrigger className="h-11">
                   <SelectValue placeholder="Select location" />
                 </SelectTrigger>
                 <SelectContent>
-                  {visibleLocations.map((loc) => (
+                  {visibleLocations.map((loc: any) => (
                     <SelectItem key={loc.id} value={loc.id}>
                       {loc.name}
                     </SelectItem>
